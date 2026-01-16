@@ -142,3 +142,25 @@ async def download_asset_content(request: web.Request) -> web.Response:
     resp.headers["Content-Disposition"] = cd
     return resp
 
+
+@ROUTES.post("/api/assets/from-hash")
+async def create_asset_from_hash(request: web.Request) -> web.Response:
+    try:
+        payload = await request.json()
+        body = schemas_in.CreateFromHashBody.model_validate(payload)
+    except ValidationError as ve:
+        return _validation_error_response("INVALID_BODY", ve)
+    except Exception:
+        return _error_response(400, "INVALID_JSON", "Request body must be valid JSON.")
+
+    result = manager.create_asset_from_hash(
+        hash_str=body.hash,
+        name=body.name,
+        tags=body.tags,
+        user_metadata=body.user_metadata,
+        owner_id=USER_MANAGER.get_request_user_id(request),
+    )
+    if result is None:
+        return _error_response(404, "ASSET_NOT_FOUND", f"Asset content {body.hash} does not exist")
+    return web.json_response(result.model_dump(mode="json"), status=201)
+

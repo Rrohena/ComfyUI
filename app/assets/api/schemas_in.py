@@ -57,6 +57,47 @@ class ListAssetsQuery(BaseModel):
         return None
 
 
+class CreateFromHashBody(BaseModel):
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+
+    hash: str
+    name: str
+    tags: list[str] = Field(default_factory=list)
+    user_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("hash")
+    @classmethod
+    def _require_blake3(cls, v):
+        s = (v or "").strip().lower()
+        if ":" not in s:
+            raise ValueError("hash must be 'blake3:<hex>'")
+        algo, digest = s.split(":", 1)
+        if algo != "blake3":
+            raise ValueError("only canonical 'blake3:<hex>' is accepted here")
+        if not digest or any(c for c in digest if c not in "0123456789abcdef"):
+            raise ValueError("hash digest must be lowercase hex")
+        return s
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _tags_norm(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            out = [str(t).strip().lower() for t in v if str(t).strip()]
+            seen = set()
+            dedup = []
+            for t in out:
+                if t not in seen:
+                    seen.add(t)
+                    dedup.append(t)
+            return dedup
+        if isinstance(v, str):
+            return [t.strip().lower() for t in v.split(",") if t.strip()]
+        return []
+
+
+
 class TagsListQuery(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 

@@ -6,12 +6,15 @@ from app.database.db import create_session
 from app.assets.api import schemas_out
 from app.assets.database.queries import (
     asset_exists_by_hash,
+    get_asset_by_hash,
     fetch_asset_info_asset_and_tags,
     fetch_asset_info_and_asset,
+    create_asset_info_for_existing_asset,
     touch_asset_info_by_id,
     list_cache_states_by_asset_id,
     list_asset_infos_page,
     list_tags_with_usage,
+    get_asset_tags,
     pick_best_live_path,
 )
 
@@ -23,6 +26,13 @@ def _safe_sort_field(requested: str | None) -> str:
     if v in {"name", "created_at", "updated_at", "size", "last_access_time"}:
         return v
     return "created_at"
+
+
+def _safe_filename(name: str | None, fallback: str) -> str:
+    n = os.path.basename((name or "").strip() or fallback)
+    if n:
+        return n
+    return fallback
 
 
 def asset_exists(*, asset_hash: str) -> bool:
@@ -86,6 +96,7 @@ def list_assets(
         has_more=(offset + len(summaries)) < total,
     )
 
+
 def get_asset(
     *,
     asset_info_id: str,
@@ -111,6 +122,7 @@ def get_asset(
         last_access_time=info.last_access_time,
     )
 
+
 def resolve_asset_content_for_download(
     *,
     asset_info_id: str,
@@ -133,6 +145,48 @@ def resolve_asset_content_for_download(
     ctype = asset.mime_type or mimetypes.guess_type(info.name or abs_path)[0] or "application/octet-stream"
     download_name = info.name or os.path.basename(abs_path)
     return abs_path, ctype, download_name
+
+
+def create_asset_from_hash(
+    *,
+    hash_str: str,
+    name: str,
+    tags: list[str] | None = None,
+    user_metadata: dict | None = None,
+    owner_id: str = "",
+) -> schemas_out.AssetCreated | None:
+    canonical = hash_str.strip().lower()
+    with create_session() as session:
+        asset = get_asset_by_hash(session, asset_hash=canonical)
+        if not asset:
+            return None
+
+        info = create_asset_info_for_existing_asset(
+            session,
+            asset_hash=canonical,
+            name=_safe_filename(name, fallback=canonical.split(":", 1)[1]),
+            user_metadata=user_metadata or {},
+            tags=tags or [],
+            tag_origin="manual",
+            owner_id=owner_id,
+        )
+        tag_names = get_asset_tags(session, asset_info_id=info.id)
+        session.commit()
+
+    return schemas_out.AssetCreated(
+        id=info.id,
+        name=info.name,
+        asset_hash=asset.hash,
+        size=int(asset.size_bytes),
+        mime_type=asset.mime_type,
+        tags=tag_names,
+        user_metadata=info.user_metadata or {},
+        preview_id=info.preview_id,
+        created_at=info.created_at,
+        last_access_time=info.last_access_time,
+        created_new=False,
+    )
+
 
 def list_tags(
     prefix: str | None = None,

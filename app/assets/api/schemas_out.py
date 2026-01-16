@@ -48,6 +48,10 @@ class AssetDetail(BaseModel):
         return v.isoformat() if v else None
 
 
+class AssetCreated(AssetDetail):
+    created_new: bool
+
+
 class TagUsage(BaseModel):
     name: str
     count: int

@@ -2,10 +2,15 @@ import os
 import sqlalchemy as sa
 from collections import defaultdict
 from datetime import datetime
-from sqlalchemy import select, exists, func
+from typing import Iterable
+from sqlalchemy import select, delete, exists, func
+from sqlalchemy.dialects import sqlite
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, contains_eager, noload
 from app.assets.database.models import Asset, AssetInfo, AssetCacheState, AssetInfoMeta, AssetInfoTag, Tag
-from app.assets.helpers import escape_like_prefix, normalize_tags, utcnow
+from app.assets.helpers import (
+    compute_relative_filename, escape_like_prefix, normalize_tags, project_kv, utcnow
+)
 from typing import Sequence
 
 
@@ -15,6 +20,22 @@ def visible_owner_clause(owner_id: str) -> sa.sql.ClauseElement:
     if owner_id == "":
         return AssetInfo.owner_id == ""
     return AssetInfo.owner_id.in_(["", owner_id])
+
+
+def pick_best_live_path(states: Sequence[AssetCacheState]) -> str:
+    """
+    Return the best on-disk path among cache states:
+      1) Prefer a path that exists with needs_verify == False (already verified).
+      2) Otherwise, pick the first path that exists.
+      3) Otherwise return empty string.
+    """
+    alive = [s for s in states if getattr(s, "file_path", None) and os.path.isfile(s.file_path)]
+    if not alive:
+        return ""
+    for s in alive:
+        if not getattr(s, "needs_verify", False):
+            return s.file_path
+    return alive[0].file_path
 
 
 def apply_tag_filters(
@@ -107,6 +128,12 @@ def asset_exists_by_hash(session: Session, asset_hash: str) -> bool:
         )
     ).first()
     return row is not None
+
+
+def get_asset_by_hash(session: Session, *, asset_hash: str) -> Asset | None:
+    return (
+        session.execute(select(Asset).where(Asset.hash == asset_hash).limit(1))
+    ).scalars().first()
 
 
 def get_asset_info_by_id(session: Session, asset_info_id: str) -> AssetInfo | None:
@@ -265,6 +292,155 @@ def touch_asset_info_by_id(
     session.execute(stmt.values(last_access_time=ts))
 
 
+def create_asset_info_for_existing_asset(
+    session: Session,
+    *,
+    asset_hash: str,
+    name: str,
+    user_metadata: dict | None = None,
+    tags: Sequence[str] | None = None,
+    tag_origin: str = "manual",
+    owner_id: str = "",
+) -> AssetInfo:
+    """Create or return an existing AssetInfo for an Asset identified by asset_hash."""
+    now = utcnow()
+    asset = get_asset_by_hash(session, asset_hash=asset_hash)
+    if not asset:
+        raise ValueError(f"Unknown asset hash {asset_hash}")
+
+    info = AssetInfo(
+        owner_id=owner_id,
+        name=name,
+        asset_id=asset.id,
+        preview_id=None,
+        created_at=now,
+        updated_at=now,
+        last_access_time=now,
+    )
+    try:
+        with session.begin_nested():
+            session.add(info)
+            session.flush()
+    except IntegrityError:
+        existing = (
+            session.execute(
+                select(AssetInfo)
+                .options(noload(AssetInfo.tags))
+                .where(
+                    AssetInfo.asset_id == asset.id,
+                    AssetInfo.name == name,
+                    AssetInfo.owner_id == owner_id,
+                )
+                .limit(1)
+            )
+        ).unique().scalars().first()
+        if not existing:
+            raise RuntimeError("AssetInfo upsert failed to find existing row after conflict.")
+        return existing
+
+    # metadata["filename"] hack
+    new_meta = dict(user_metadata or {})
+    computed_filename = None
+    try:
+        p = pick_best_live_path(list_cache_states_by_asset_id(session, asset_id=asset.id))
+        if p:
+            computed_filename = compute_relative_filename(p)
+    except Exception:
+        computed_filename = None
+    if computed_filename:
+        new_meta["filename"] = computed_filename
+    if new_meta:
+        replace_asset_info_metadata_projection(
+            session,
+            asset_info_id=info.id,
+            user_metadata=new_meta,
+        )
+
+    if tags is not None:
+        set_asset_info_tags(
+            session,
+            asset_info_id=info.id,
+            tags=tags,
+            origin=tag_origin,
+        )
+    return info
+
+
+def set_asset_info_tags(
+    session: Session,
+    *,
+    asset_info_id: str,
+    tags: Sequence[str],
+    origin: str = "manual",
+) -> dict:
+    desired = normalize_tags(tags)
+
+    current = set(
+        tag_name for (tag_name,) in (
+            session.execute(select(AssetInfoTag.tag_name).where(AssetInfoTag.asset_info_id == asset_info_id))
+        ).all()
+    )
+
+    to_add = [t for t in desired if t not in current]
+    to_remove = [t for t in current if t not in desired]
+
+    if to_add:
+        ensure_tags_exist(session, to_add, tag_type="user")
+        session.add_all([
+            AssetInfoTag(asset_info_id=asset_info_id, tag_name=t, origin=origin, added_at=utcnow())
+            for t in to_add
+        ])
+        session.flush()
+
+    if to_remove:
+        session.execute(
+            delete(AssetInfoTag)
+            .where(AssetInfoTag.asset_info_id == asset_info_id, AssetInfoTag.tag_name.in_(to_remove))
+        )
+        session.flush()
+
+    return {"added": to_add, "removed": to_remove, "total": desired}
+
+
+def replace_asset_info_metadata_projection(
+    session: Session,
+    *,
+    asset_info_id: str,
+    user_metadata: dict | None = None,
+) -> None:
+    info = session.get(AssetInfo, asset_info_id)
+    if not info:
+        raise ValueError(f"AssetInfo {asset_info_id} not found")
+
+    info.user_metadata = user_metadata or {}
+    info.updated_at = utcnow()
+    session.flush()
+
+    session.execute(delete(AssetInfoMeta).where(AssetInfoMeta.asset_info_id == asset_info_id))
+    session.flush()
+
+    if not user_metadata:
+        return
+
+    rows: list[AssetInfoMeta] = []
+    for k, v in user_metadata.items():
+        for r in project_kv(k, v):
+            rows.append(
+                AssetInfoMeta(
+                    asset_info_id=asset_info_id,
+                    key=r["key"],
+                    ordinal=int(r["ordinal"]),
+                    val_str=r.get("val_str"),
+                    val_num=r.get("val_num"),
+                    val_bool=r.get("val_bool"),
+                    val_json=r.get("val_json"),
+                )
+            )
+    if rows:
+        session.add_all(rows)
+        session.flush()
+
+
 def list_tags_with_usage(
     session: Session,
     prefix: str | None = None,
@@ -324,17 +500,24 @@ def list_tags_with_usage(
     return rows_norm, int(total or 0)
 
 
-def pick_best_live_path(states: Sequence[AssetCacheState]) -> str:
-    """
-    Return the best on-disk path among cache states:
-      1) Prefer a path that exists with needs_verify == False (already verified).
-      2) Otherwise, pick the first path that exists.
-      3) Otherwise return empty string.
-    """
-    alive = [s for s in states if getattr(s, "file_path", None) and os.path.isfile(s.file_path)]
-    if not alive:
-        return ""
-    for s in alive:
-        if not getattr(s, "needs_verify", False):
-            return s.file_path
-    return alive[0].file_path
+def ensure_tags_exist(session: Session, names: Iterable[str], tag_type: str = "user") -> None:
+    wanted = normalize_tags(list(names))
+    if not wanted:
+        return
+    rows = [{"name": n, "tag_type": tag_type} for n in list(dict.fromkeys(wanted))]
+    ins = (
+        sqlite.insert(Tag)
+        .values(rows)
+        .on_conflict_do_nothing(index_elements=[Tag.name])
+    )
+    session.execute(ins)
+
+
+def get_asset_tags(session: Session, *, asset_info_id: str) -> list[str]:
+    return [
+        tag_name for (tag_name,) in (
+            session.execute(
+                select(AssetInfoTag.tag_name).where(AssetInfoTag.asset_info_id == asset_info_id)
+            )
+        ).all()
+    ]
