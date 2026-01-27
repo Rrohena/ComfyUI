@@ -326,7 +326,7 @@ def setup_database():
         if dependencies_available():
             init_db()
             if not args.disable_assets_autoscan:
-                seed_assets(["models", "input", "output"], enable_logging=True)
+                seed_assets(["models"], enable_logging=True)
     except Exception as e:
         logging.error(f"Failed to initialize database. Please ensure you have installed the latest requirements. If the error persists, please report this as in future the database will be required: {e}")
 

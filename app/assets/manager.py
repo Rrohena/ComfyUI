@@ -28,7 +28,6 @@ from app.assets.database.queries import (
 )
 from app.assets.helpers import resolve_destination_from_tags, ensure_within_base
 from app.assets.database.models import Asset
-import app.assets.hashing as hashing
 
 
 def _safe_sort_field(requested: str | None) -> str:

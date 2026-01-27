@@ -689,7 +689,7 @@ class PromptServer():
         @routes.get("/object_info")
         async def get_object_info(request):
             try:
-                seed_assets(["models", "input", "output"])
+                seed_assets(["models"])
             except Exception as e:
                 logging.error(f"Failed to seed assets: {e}")
             with folder_paths.cache_helper:

@@ -147,6 +147,7 @@ async def create_asset_from_hash(request: web.Request) -> web.Response:
 @ROUTES.post("/api/assets")
 async def upload_asset(request: web.Request) -> web.Response:
     """Multipart/form-data endpoint for Asset uploads."""
+    return _error_response(501, "NOT_IMPLEMENTED", "Uploading assets is not implemented yet.")
 
     if not (request.content_type or "").lower().startswith("multipart/"):
         return _error_response(415, "UNSUPPORTED_MEDIA_TYPE", "Use multipart/form-data for uploads.")
