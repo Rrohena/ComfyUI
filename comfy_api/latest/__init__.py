@@ -106,6 +106,42 @@ class Types:
     MESH = MESH
     VOXEL = VOXEL
 
+
+class Caching:
+    """
+    External cache provider API for distributed caching.
+
+    Enables sharing cached results across multiple ComfyUI instances
+    (e.g., Kubernetes pods) without monkey-patching internal methods.
+
+    Example usage:
+        from comfy_api.latest import Caching
+
+        class MyRedisProvider(Caching.CacheProvider):
+            def on_lookup(self, context):
+                # Check Redis for cached result
+                ...
+
+            def on_store(self, context, value):
+                # Store to Redis (can be async internally)
+                ...
+
+        Caching.register_provider(MyRedisProvider())
+    """
+    # Import from comfy_execution.cache_provider (source of truth)
+    from comfy_execution.cache_provider import (
+        CacheProvider,
+        CacheContext,
+        CacheValue,
+        register_cache_provider as register_provider,
+        unregister_cache_provider as unregister_provider,
+        get_cache_providers as get_providers,
+        has_cache_providers as has_providers,
+        clear_cache_providers as clear_providers,
+        estimate_value_size,
+    )
+
+
 ComfyAPI = ComfyAPI_latest
 
 # Create a synchronous version of the API
@@ -125,6 +161,7 @@ __all__ = [
     "Input",
     "InputImpl",
     "Types",
+    "Caching",
     "ComfyExtension",
     "io",
     "IO",

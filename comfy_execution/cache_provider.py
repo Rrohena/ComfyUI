@@ -4,6 +4,9 @@ External Cache Provider API for distributed caching.
 This module provides a public API for external cache providers, enabling
 distributed caching across multiple ComfyUI instances (e.g., Kubernetes pods).
 
+Public API is also available via:
+    from comfy_api.latest import Caching
+
 Example usage:
     from comfy_execution.cache_provider import (
         CacheProvider, CacheContext, CacheValue, register_cache_provider
@@ -120,7 +123,7 @@ class CacheProvider(ABC):
 
         Common filters:
             - By class_type: Only expensive nodes (KSampler, VAEDecode)
-            - By size: Skip small values (< 1MB)
+            - By size: Skip large values to reduce network overhead
 
         Default: Returns True (cache everything).
         """
