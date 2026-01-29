@@ -20,6 +20,9 @@ USER_MANAGER: user_manager.UserManager | None = None
 # UUID regex (canonical hyphenated form, case-insensitive)
 UUID_RE = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 
+# Note to any custom node developers reading this code:
+# The assets system is not yet fully implemented, do not rely on the code in /app/assets remaining the same.
+
 def register_assets_system(app: web.Application, user_manager_instance: user_manager.UserManager) -> None:
     global USER_MANAGER
     USER_MANAGER = user_manager_instance
