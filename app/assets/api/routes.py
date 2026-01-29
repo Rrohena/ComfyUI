@@ -70,7 +70,7 @@ async def list_assets(request: web.Request) -> web.Response:
         order=q.order,
         owner_id=USER_MANAGER.get_request_user_id(request),
     )
-    return web.json_response(payload.model_dump(mode="json"))
+    return web.json_response(payload.model_dump(mode="json", exclude_none=True))
 
 
 @ROUTES.get(f"/api/assets/{{id:{UUID_RE}}}")
@@ -118,10 +118,33 @@ async def download_asset_content(request: web.Request) -> web.Response:
     quoted = (filename or "").replace("\r", "").replace("\n", "").replace('"', "'")
     cd = f'{disposition}; filename="{quoted}"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'
 
-    resp = web.FileResponse(abs_path)
-    resp.content_type = content_type
-    resp.headers["Content-Disposition"] = cd
-    return resp
+    file_size = os.path.getsize(abs_path)
+    logging.info(
+        "download_asset_content: path=%s, size=%d bytes (%.2f MB), content_type=%s, filename=%s",
+        abs_path,
+        file_size,
+        file_size / (1024 * 1024),
+        content_type,
+        filename,
+    )
+
+    async def file_sender():
+        chunk_size = 64 * 1024
+        with open(abs_path, "rb") as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+
+    return web.Response(
+        body=file_sender(),
+        content_type=content_type,
+        headers={
+            "Content-Disposition": cd,
+            "Content-Length": str(file_size),
+        },
+    )
 
 
 @ROUTES.post("/api/assets/from-hash")

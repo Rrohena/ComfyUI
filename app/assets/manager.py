@@ -100,7 +100,6 @@ def list_assets(
                 size=int(asset.size_bytes) if asset else None,
                 mime_type=asset.mime_type if asset else None,
                 tags=tags,
-                preview_url=f"/api/assets/{info.id}/content",
                 created_at=info.created_at,
                 updated_at=info.updated_at,
                 last_access_time=info.last_access_time,
