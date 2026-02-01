@@ -14,21 +14,26 @@ const int MODE_BARREL   = 2;
 const int MODE_SWIRL    = 3;
 const int MODE_DIAGONAL = 4;
 
+const float AMOUNT_SCALE = 0.0005;
+const float RADIAL_MULT = 4.0;
+const float BARREL_MULT = 8.0;
+const float INV_SQRT2 = 0.70710678118;
+
 void main() {
     vec2 uv = v_texCoord;
     vec4 original = texture(u_image0, uv);
     
-    float amount = u_float0 * 0.0005;
+    float amount = u_float0 * AMOUNT_SCALE;
     
-    if (amount == 0.0) {
+    if (amount < 0.000001) {
         fragColor = original;
         return;
     }
     
     vec2 centered = uv - 0.5;
     float r = length(centered);
-    vec2 dir = normalize(centered + 0.001);
-    vec2 offset;
+    vec2 dir = r > 0.0001 ? centered / r : vec2(0.0);
+    vec2 offset = vec2(0.0);
     
     if (u_int0 == MODE_LINEAR) {
         // Horizontal shift
@@ -36,20 +41,20 @@ void main() {
     }
     else if (u_int0 == MODE_RADIAL) {
         // Outward from center, stronger at edges
-        offset = dir * r * amount * 4.0;
+        offset = dir * r * amount * RADIAL_MULT;
     }
     else if (u_int0 == MODE_BARREL) {
         // Lens distortion simulation (r² falloff)
-        offset = dir * r * r * amount * 8.0;
+        offset = dir * r * r * amount * BARREL_MULT;
     }
     else if (u_int0 == MODE_SWIRL) {
         // Perpendicular to radial (rotational aberration)
         vec2 perp = vec2(-dir.y, dir.x);
-        offset = perp * r * amount * 4.0;
+        offset = perp * r * amount * RADIAL_MULT;
     }
     else if (u_int0 == MODE_DIAGONAL) {
         // 45° offset
-        offset = vec2(amount, amount) * 0.707;
+        offset = vec2(amount, amount) * INV_SQRT2;
     }
     
     float red = texture(u_image0, uv + offset).r;

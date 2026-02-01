@@ -106,23 +106,8 @@ vec3 rgb2hsb(vec3 c) {
 }
 
 vec3 hsb2rgb(vec3 hsb) {
-    float h = hsb.x * 6.0;
-    float s = hsb.y;
-    float b = hsb.z;
-
-    float c = b * s;
-    float x = c * (1.0 - abs(mod(h, 2.0) - 1.0));
-    float m = b - c;
-
-    vec3 rgb;
-    if (h < 1.0)       rgb = vec3(c, x, 0.0);
-    else if (h < 2.0)  rgb = vec3(x, c, 0.0);
-    else if (h < 3.0)  rgb = vec3(0.0, c, x);
-    else if (h < 4.0)  rgb = vec3(0.0, x, c);
-    else if (h < 5.0)  rgb = vec3(x, 0.0, c);
-    else               rgb = vec3(c, 0.0, x);
-
-    return rgb + m;
+    vec3 rgb = clamp(abs(mod(hsb.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    return hsb.z * mix(vec3(1.0), rgb, hsb.y);
 }
 
 //=============================================================================
@@ -149,16 +134,6 @@ float getHueWeight(float hue, float center, float overlap) {
 float getModeWeight(float hue, int mode, float overlap) {
     if (mode == MODE_MASTER || mode == MODE_COLORIZE) return 1.0;
 
-    float centers[6];
-    centers[0] = 0.0;
-    centers[1] = 1.0/6.0;
-    centers[2] = 2.0/6.0;
-    centers[3] = 3.0/6.0;
-    centers[4] = 4.0/6.0;
-    centers[5] = 5.0/6.0;
-
-    int idx = mode - 1;
-
     if (mode == MODE_RED) {
         return max(
             getHueWeight(hue, 0.0, overlap),
@@ -166,7 +141,8 @@ float getModeWeight(float hue, int mode, float overlap) {
         );
     }
 
-    return getHueWeight(hue, centers[idx], overlap);
+    float center = float(mode - 1) / 6.0;
+    return getHueWeight(hue, center, overlap);
 }
 
 //=============================================================================

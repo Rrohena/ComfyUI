@@ -25,60 +25,66 @@ float gaussian(float x, float sigma) {
 void main() {
     vec2 texelSize = 1.0 / u_resolution;
     float radius = max(u_float0, 0.0);
-    
-    // Radial (angular) blur
+
+    // Radial (angular) blur with incremental rotation
     if (u_int0 == BLUR_RADIAL) {
         vec2 center = vec2(0.5);
         vec2 dir = v_texCoord - center;
         float dist = length(dir);
-        
-        // Avoid division by zero
+
         if (dist < 1e-4) {
             fragColor0 = texture(u_image0, v_texCoord);
             return;
         }
-        
+
         vec4 sum = vec4(0.0);
         float totalWeight = 0.0;
         float angleStep = radius * RADIAL_STRENGTH;
-        
+
         dir /= dist;
-        
+
+        float cosStep = cos(angleStep);
+        float sinStep = sin(angleStep);
+
+        float negAngle = -float(RADIAL_SAMPLES) * angleStep;
+        vec2 rotDir = vec2(
+            dir.x * cos(negAngle) - dir.y * sin(negAngle),
+            dir.x * sin(negAngle) + dir.y * cos(negAngle)
+        );
+
         for (int i = -RADIAL_SAMPLES; i <= RADIAL_SAMPLES; i++) {
-            float a = float(i) * angleStep;
-            float s = sin(a);
-            float c = cos(a);
-            vec2 rotatedDir = vec2(
-                dir.x * c - dir.y * s,
-                dir.x * s + dir.y * c
-            );
-            vec2 uv = center + rotatedDir * dist;
+            vec2 uv = center + rotDir * dist;
             float w = 1.0 - abs(float(i)) / float(RADIAL_SAMPLES);
             sum += texture(u_image0, uv) * w;
             totalWeight += w;
+
+            rotDir = vec2(
+                rotDir.x * cosStep - rotDir.y * sinStep,
+                rotDir.x * sinStep + rotDir.y * cosStep
+            );
         }
-        
-        fragColor0 = sum / totalWeight;
+
+        fragColor0 = sum / max(totalWeight, 0.001);
         return;
     }
-    
-    // Gaussian / Box blur
+
+    // Gaussian / Box blur (grid sampling)
     int samples = int(ceil(radius));
-    
+
     if (samples == 0) {
         fragColor0 = texture(u_image0, v_texCoord);
         return;
     }
-    
+
     vec4 color = vec4(0.0);
     float totalWeight = 0.0;
     float sigma = radius / 2.0;
-    
+
     for (int x = -samples; x <= samples; x++) {
         for (int y = -samples; y <= samples; y++) {
             vec2 offset = vec2(float(x), float(y)) * texelSize;
             vec4 sample_color = texture(u_image0, v_texCoord + offset);
-            
+
             float weight;
             if (u_int0 == BLUR_GAUSSIAN) {
                 float dist = length(vec2(float(x), float(y)));
@@ -87,11 +93,11 @@ void main() {
                 // BLUR_BOX
                 weight = 1.0;
             }
-            
+
             color += sample_color * weight;
             totalWeight += weight;
         }
     }
-    
+
     fragColor0 = color / totalWeight;
 }

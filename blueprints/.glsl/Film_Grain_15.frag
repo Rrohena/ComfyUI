@@ -86,7 +86,7 @@ void main() {
     float luma = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
     
     // Grain UV (resolution-independent)
-    vec2 grainUV = v_texCoord * u_resolution / max(u_float1, 0.001);
+    vec2 grainUV = v_texCoord * u_resolution / max(u_float1, 0.01);
     uvec2 grainPixel = uvec2(grainUV);
     
     float g;
@@ -120,5 +120,5 @@ void main() {
     vec3 grainColor = mix(vec3(g), grainRGB, clamp(u_float2, 0.0, 1.0));
     
     color.rgb += grainColor * strength * lumWeight;
-    fragColor0 = vec4(color.rgb, color.a);
+    fragColor0 = vec4(clamp(color.rgb, 0.0, 1.0), color.a);
 }

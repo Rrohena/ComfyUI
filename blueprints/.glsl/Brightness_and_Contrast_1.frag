@@ -8,14 +8,15 @@ uniform float u_float1; // Contrast slider -100..100
 in vec2 v_texCoord;
 out vec4 fragColor;
 
-const float EPSILON = 1e-5;
+const float MID_GRAY = 0.18;  // 18% reflectance
 
+// sRGB gamma 2.2 approximation
 vec3 srgbToLinear(vec3 c) {
-    return pow(c, vec3(2.2));
+    return pow(max(c, 0.0), vec3(2.2));
 }
 
 vec3 linearToSrgb(vec3 c) {
-    return pow(c, vec3(1.0/2.2));
+    return pow(max(c, 0.0), vec3(1.0/2.2));
 }
 
 float mapBrightness(float b) {
@@ -32,15 +33,9 @@ void main() {
     float brightness = mapBrightness(u_float0);
     float contrast   = mapContrast(u_float1);
 
-    // Early exit if no adjustment
-    if (abs(brightness) < EPSILON && abs(contrast - 1.0) < EPSILON) {
-        fragColor = orig;
-        return;
-    }
-
     vec3 lin = srgbToLinear(orig.rgb);
 
-    lin = (lin - 0.5) * contrast + brightness + 0.5;
+    lin = (lin - MID_GRAY) * contrast + brightness + MID_GRAY;
 
     // Convert back to sRGB
     vec3 result = linearToSrgb(clamp(lin, 0.0, 1.0));
