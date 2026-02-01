@@ -76,7 +76,6 @@ void main() {
     float t1 = threshold + 0.15;
     
     vec2 texelSize = 1.0 / u_resolution;
-    float aspect = u_resolution.x / u_resolution.y;
     float radius2 = radius * radius;
     
     float sampleScale = clamp(radius * 0.75, 0.35, 1.0);
@@ -104,7 +103,7 @@ void main() {
         float fi = float(i);
         float dist = sqrt(fi / float(samples)) * radius * radiusJitter;
         
-        vec2 offset = dir * dist * texelSize * vec2(1.0, aspect);
+        vec2 offset = dir * dist * texelSize;
         vec3 c = texture(u_image0, v_texCoord + offset).rgb;
         float mask = smoothstep(t0, t1, dot(c, LUMA));
         

@@ -2,7 +2,6 @@
 precision highp float;
 
 uniform sampler2D u_image0;
-uniform vec2 u_resolution;
 
 in vec2 v_texCoord;
 layout(location = 0) out vec4 fragColor0;

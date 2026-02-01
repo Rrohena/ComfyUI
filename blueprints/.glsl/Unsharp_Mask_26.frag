@@ -36,11 +36,11 @@ void main() {
     for (int x = -samples; x <= samples; x++) {
         for (int y = -samples; y <= samples; y++) {
             vec2 offset = vec2(float(x), float(y)) * texel;
-            vec2 sampleCoord = v_texCoord + offset;
+            vec4 sample_color = texture(u_image0, v_texCoord + offset);
 
             float dist = length(vec2(float(x), float(y)));
             float weight = gaussian(dist, sigma);
-            blurred += texture(u_image0, sampleCoord) * weight;
+            blurred += sample_color * weight;
             totalWeight += weight;
         }
     }
