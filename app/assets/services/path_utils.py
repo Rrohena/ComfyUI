@@ -7,6 +7,21 @@ import folder_paths
 from app.assets.helpers import normalize_tags
 
 
+def get_comfy_models_folders() -> list[tuple[str, list[str]]]:
+    """Build a list of (folder_name, base_paths[]) categories that are configured for model locations.
+
+    We trust `folder_paths.folder_names_and_paths` and include a category if
+    *any* of its base paths lies under the Comfy `models_dir`.
+    """
+    targets: list[tuple[str, list[str]]] = []
+    models_root = os.path.abspath(folder_paths.models_dir)
+    for name, values in folder_paths.folder_names_and_paths.items():
+        paths, _exts = values[0], values[1]  # NOTE: this prevents nodepacks that hackily edit folder_... from breaking ComfyUI
+        if any(os.path.abspath(p).startswith(models_root + os.sep) for p in paths):
+            targets.append((name, paths))
+    return targets
+
+
 def resolve_destination_from_tags(tags: list[str]) -> tuple[str, list[str]]:
     """Validates and maps tags -> (base_dir, subdirs_for_fs)"""
     root = tags[0]
@@ -84,8 +99,6 @@ def get_relative_to_root_category_path_of_asset(file_path: str) -> tuple[Literal
     Raises:
         ValueError: if the path does not belong to input, output, or configured model bases.
     """
-    from app.assets.services.scanner import get_comfy_models_folders
-
     fp_abs = os.path.abspath(file_path)
 
     def _is_within(child: str, parent: str) -> bool:

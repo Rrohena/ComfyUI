@@ -27,7 +27,11 @@ from app.assets.database.queries import (
     bulk_insert_tags_and_meta,
 )
 from app.assets.helpers import utcnow
-from app.assets.services.path_utils import compute_relative_filename, get_name_and_tags_from_asset_path
+from app.assets.services.path_utils import (
+    compute_relative_filename,
+    get_comfy_models_folders,
+    get_name_and_tags_from_asset_path,
+)
 from app.database.db import create_session, dependencies_available
 
 
@@ -59,21 +63,6 @@ def list_tree(base_dir: str) -> list[str]:
         for name in filenames:
             out.append(os.path.abspath(os.path.join(dirpath, name)))
     return out
-
-
-def get_comfy_models_folders() -> list[tuple[str, list[str]]]:
-    """Build a list of (folder_name, base_paths[]) categories that are configured for model locations.
-
-    We trust `folder_paths.folder_names_and_paths` and include a category if
-    *any* of its base paths lies under the Comfy `models_dir`.
-    """
-    targets: list[tuple[str, list[str]]] = []
-    models_root = os.path.abspath(folder_paths.models_dir)
-    for name, values in folder_paths.folder_names_and_paths.items():
-        paths, _exts = values[0], values[1]  # NOTE: this prevents nodepacks that hackily edit folder_... from breaking ComfyUI
-        if any(os.path.abspath(p).startswith(models_root + os.sep) for p in paths):
-            targets.append((name, paths))
-    return targets
 
 
 def prefixes_for_root(root: RootType) -> list[str]:
