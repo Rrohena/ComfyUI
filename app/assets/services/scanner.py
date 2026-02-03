@@ -402,6 +402,64 @@ def _prune_orphans_safely(prefixes: list[str]) -> int:
         return 0
 
 
+def _collect_paths_for_roots(roots: tuple[RootType, ...]) -> list[str]:
+    """Collect all file paths for the given roots."""
+    paths: list[str] = []
+    if "models" in roots:
+        paths.extend(collect_models_files())
+    if "input" in roots:
+        paths.extend(list_files_recursively(folder_paths.get_input_directory()))
+    if "output" in roots:
+        paths.extend(list_files_recursively(folder_paths.get_output_directory()))
+    return paths
+
+
+def _build_asset_specs(
+    paths: list[str],
+    existing_paths: set[str],
+) -> tuple[list[dict], set[str], int]:
+    """Build asset specs from paths, returning (specs, tag_pool, skipped_count)."""
+    specs: list[dict] = []
+    tag_pool: set[str] = set()
+    skipped = 0
+
+    for p in paths:
+        abs_p = os.path.abspath(p)
+        if abs_p in existing_paths:
+            skipped += 1
+            continue
+        try:
+            stat_p = os.stat(abs_p, follow_symlinks=False)
+        except OSError:
+            continue
+        if not stat_p.st_size:
+            continue
+        name, tags = get_name_and_tags_from_asset_path(abs_p)
+        specs.append({
+            "abs_path": abs_p,
+            "size_bytes": stat_p.st_size,
+            "mtime_ns": getattr(stat_p, "st_mtime_ns", int(stat_p.st_mtime * 1_000_000_000)),
+            "info_name": name,
+            "tags": tags,
+            "fname": compute_relative_filename(abs_p),
+        })
+        tag_pool.update(tags)
+
+    return specs, tag_pool, skipped
+
+
+def _insert_asset_specs(specs: list[dict], tag_pool: set[str]) -> int:
+    """Insert asset specs into database, returning count of created infos."""
+    if not specs:
+        return 0
+    with create_session() as sess:
+        if tag_pool:
+            ensure_tags_exist(sess, tag_pool, tag_type="user")
+        result = _batch_insert_assets_from_paths(sess, specs=specs, owner_id="")
+        sess.commit()
+        return result["inserted_infos"]
+
+
 def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> None:
     """Scan the given roots and seed the assets into the database."""
     if not dependencies_available():
@@ -410,71 +468,30 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
         return
 
     t_start = time.perf_counter()
-    created = 0
-    skipped_existing = 0
-    orphans_pruned = 0
-    paths: list[str] = []
 
-    try:
-        existing_paths: set[str] = set()
-        for r in roots:
-            existing_paths.update(_sync_root_safely(r))
+    # Sync existing cache states
+    existing_paths: set[str] = set()
+    for r in roots:
+        existing_paths.update(_sync_root_safely(r))
 
-        all_prefixes = [
-            os.path.abspath(p) for r in roots for p in get_prefixes_for_root(r)
-        ]
-        orphans_pruned = _prune_orphans_safely(all_prefixes)
+    # Prune orphaned assets
+    all_prefixes = [
+        os.path.abspath(p) for r in roots for p in get_prefixes_for_root(r)
+    ]
+    orphans_pruned = _prune_orphans_safely(all_prefixes)
 
-        if "models" in roots:
-            paths.extend(collect_models_files())
-        if "input" in roots:
-            paths.extend(list_files_recursively(folder_paths.get_input_directory()))
-        if "output" in roots:
-            paths.extend(list_files_recursively(folder_paths.get_output_directory()))
+    # Collect and process paths
+    paths = _collect_paths_for_roots(roots)
+    specs, tag_pool, skipped_existing = _build_asset_specs(paths, existing_paths)
+    created = _insert_asset_specs(specs, tag_pool)
 
-        specs: list[dict] = []
-        tag_pool: set[str] = set()
-        for p in paths:
-            abs_p = os.path.abspath(p)
-            if abs_p in existing_paths:
-                skipped_existing += 1
-                continue
-            try:
-                stat_p = os.stat(abs_p, follow_symlinks=False)
-            except OSError:
-                continue
-            if not stat_p.st_size:
-                continue
-            name, tags = get_name_and_tags_from_asset_path(abs_p)
-            specs.append({
-                "abs_path": abs_p,
-                "size_bytes": stat_p.st_size,
-                "mtime_ns": getattr(stat_p, "st_mtime_ns", int(stat_p.st_mtime * 1_000_000_000)),
-                "info_name": name,
-                "tags": tags,
-                "fname": compute_relative_filename(abs_p),
-            })
-            for t in tags:
-                tag_pool.add(t)
-
-        if not specs:
-            return
-
-        with create_session() as sess:
-            if tag_pool:
-                ensure_tags_exist(sess, tag_pool, tag_type="user")
-            result = _batch_insert_assets_from_paths(sess, specs=specs, owner_id="")
-            created += result["inserted_infos"]
-            sess.commit()
-
-    finally:
-        if enable_logging:
-            logging.info(
-                "Assets scan(roots=%s) completed in %.3fs (created=%d, skipped_existing=%d, orphans_pruned=%d, total_seen=%d)",
-                roots,
-                time.perf_counter() - t_start,
-                created,
-                skipped_existing,
-                orphans_pruned,
-                len(paths),
-            )
+    if enable_logging:
+        logging.info(
+            "Assets scan(roots=%s) completed in %.3fs (created=%d, skipped_existing=%d, orphans_pruned=%d, total_seen=%d)",
+            roots,
+            time.perf_counter() - t_start,
+            created,
+            skipped_existing,
+            orphans_pruned,
+            len(paths),
+        )
