@@ -367,6 +367,41 @@ def sync_cache_states_with_filesystem(
     return survivors if collect_existing_paths else None
 
 
+def _sync_root_safely(root: RootType) -> set[str]:
+    """Sync a single root's cache states with the filesystem.
+
+    Returns survivors (existing paths) or empty set on failure.
+    """
+    try:
+        with create_session() as sess:
+            survivors = sync_cache_states_with_filesystem(
+                sess,
+                root,
+                collect_existing_paths=True,
+                update_missing_tags=True,
+            )
+            sess.commit()
+            return survivors or set()
+    except Exception as e:
+        logging.exception("fast DB scan failed for %s: %s", root, e)
+        return set()
+
+
+def _prune_orphans_safely(prefixes: list[str]) -> int:
+    """Prune orphaned assets outside the given prefixes.
+
+    Returns count pruned or 0 on failure.
+    """
+    try:
+        with create_session() as sess:
+            count = prune_orphaned_assets(sess, prefixes)
+            sess.commit()
+            return count
+    except Exception as e:
+        logging.exception("orphan pruning failed: %s", e)
+        return 0
+
+
 def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> None:
     """Scan the given roots and seed the assets into the database."""
     if not dependencies_available():
@@ -383,29 +418,12 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
     try:
         existing_paths: set[str] = set()
         for r in roots:
-            try:
-                with create_session() as sess:
-                    survivors = sync_cache_states_with_filesystem(
-                        sess,
-                        r,
-                        collect_existing_paths=True,
-                        update_missing_tags=True,
-                    )
-                    sess.commit()
-                if survivors:
-                    existing_paths.update(survivors)
-            except Exception as e:
-                logging.exception("fast DB scan failed for %s: %s", r, e)
+            existing_paths.update(_sync_root_safely(r))
 
-        try:
-            with create_session() as sess:
-                all_prefixes = [
-                    os.path.abspath(p) for r in roots for p in get_prefixes_for_root(r)
-                ]
-                orphans_pruned = prune_orphaned_assets(sess, all_prefixes)
-                sess.commit()
-        except Exception as e:
-            logging.exception("orphan pruning failed: %s", e)
+        all_prefixes = [
+            os.path.abspath(p) for r in roots for p in get_prefixes_for_root(r)
+        ]
+        orphans_pruned = _prune_orphans_safely(all_prefixes)
 
         if "models" in roots:
             paths.extend(collect_models_files())

@@ -79,24 +79,22 @@ def update_asset_metadata(
         # Compute filename from best live path
         computed_filename = _compute_filename_for_asset(session, info.asset_id)
 
+        # Determine if metadata needs updating
+        new_meta: dict | None = None
         if user_metadata is not None:
             new_meta = dict(user_metadata)
+        elif computed_filename:
+            current_meta = info.user_metadata or {}
+            if current_meta.get("filename") != computed_filename:
+                new_meta = dict(current_meta)
+
+        if new_meta is not None:
             if computed_filename:
                 new_meta["filename"] = computed_filename
             set_asset_info_metadata(
                 session, asset_info_id=asset_info_id, user_metadata=new_meta
             )
             touched = True
-        else:
-            if computed_filename:
-                current_meta = info.user_metadata or {}
-                if current_meta.get("filename") != computed_filename:
-                    new_meta = dict(current_meta)
-                    new_meta["filename"] = computed_filename
-                    set_asset_info_metadata(
-                        session, asset_info_id=asset_info_id, user_metadata=new_meta
-                    )
-                    touched = True
 
         if tags is not None:
             set_asset_info_tags(

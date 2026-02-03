@@ -31,57 +31,41 @@ def check_is_scalar(v):
     return False
 
 
-def convert_metadata_to_rows(key: str, value):
+def _scalar_to_row(key: str, ordinal: int, value) -> dict:
+    """Convert a scalar value to a typed projection row."""
+    if value is None:
+        return {
+            "key": key, "ordinal": ordinal,
+            "val_str": None, "val_num": None, "val_bool": None, "val_json": None
+        }
+    if isinstance(value, bool):
+        return {"key": key, "ordinal": ordinal, "val_bool": bool(value)}
+    if isinstance(value, (int, float, Decimal)):
+        num = value if isinstance(value, Decimal) else Decimal(str(value))
+        return {"key": key, "ordinal": ordinal, "val_num": num}
+    if isinstance(value, str):
+        return {"key": key, "ordinal": ordinal, "val_str": value}
+    return {"key": key, "ordinal": ordinal, "val_json": value}
+
+
+def convert_metadata_to_rows(key: str, value) -> list[dict]:
     """
     Turn a metadata key/value into typed projection rows.
     Returns list[dict] with keys:
       key, ordinal, and one of val_str / val_num / val_bool / val_json (others None)
     """
-    rows: list[dict] = []
-
-    def _null_row(ordinal: int) -> dict:
-        return {
-            "key": key, "ordinal": ordinal,
-            "val_str": None, "val_num": None, "val_bool": None, "val_json": None
-        }
-
     if value is None:
-        rows.append(_null_row(0))
-        return rows
+        return [_scalar_to_row(key, 0, None)]
 
     if check_is_scalar(value):
-        if isinstance(value, bool):
-            rows.append({"key": key, "ordinal": 0, "val_bool": bool(value)})
-        elif isinstance(value, (int, float, Decimal)):
-            num = value if isinstance(value, Decimal) else Decimal(str(value))
-            rows.append({"key": key, "ordinal": 0, "val_num": num})
-        elif isinstance(value, str):
-            rows.append({"key": key, "ordinal": 0, "val_str": value})
-        else:
-            rows.append({"key": key, "ordinal": 0, "val_json": value})
-        return rows
+        return [_scalar_to_row(key, 0, value)]
 
     if isinstance(value, list):
         if all(check_is_scalar(x) for x in value):
-            for i, x in enumerate(value):
-                if x is None:
-                    rows.append(_null_row(i))
-                elif isinstance(x, bool):
-                    rows.append({"key": key, "ordinal": i, "val_bool": bool(x)})
-                elif isinstance(x, (int, float, Decimal)):
-                    num = x if isinstance(x, Decimal) else Decimal(str(x))
-                    rows.append({"key": key, "ordinal": i, "val_num": num})
-                elif isinstance(x, str):
-                    rows.append({"key": key, "ordinal": i, "val_str": x})
-                else:
-                    rows.append({"key": key, "ordinal": i, "val_json": x})
-            return rows
-        for i, x in enumerate(value):
-            rows.append({"key": key, "ordinal": i, "val_json": x})
-        return rows
+            return [_scalar_to_row(key, i, x) for i, x in enumerate(value)]
+        return [{"key": key, "ordinal": i, "val_json": x} for i, x in enumerate(value)]
 
-    rows.append({"key": key, "ordinal": 0, "val_json": value})
-    return rows
+    return [{"key": key, "ordinal": 0, "val_json": value}]
 
 MAX_BIND_PARAMS = 800
 
