@@ -38,7 +38,7 @@ from app.database.db import create_session, dependencies_available
 RootType = Literal["models", "input", "output"]
 
 
-def check_asset_file_fast(
+def verify_asset_file_unchanged(
     mtime_db: int | None,
     size_db: int | None,
     stat_result: os.stat_result,
@@ -54,7 +54,7 @@ def check_asset_file_fast(
     return True
 
 
-def list_tree(base_dir: str) -> list[str]:
+def list_files_recursively(base_dir: str) -> list[str]:
     out: list[str] = []
     base_abs = os.path.abspath(base_dir)
     if not os.path.isdir(base_abs):
@@ -99,7 +99,7 @@ def collect_models_files() -> list[str]:
     return out
 
 
-def _seed_from_paths_batch(
+def _batch_insert_assets_from_paths(
     session: Session,
     specs: list[dict],
     owner_id: str = "",
@@ -260,7 +260,7 @@ def prune_orphaned_assets(session, valid_prefixes: list[str]) -> int:
     return delete_assets_by_ids(session, orphan_ids)
 
 
-def reconcile_cache_states_for_root(
+def sync_cache_states_with_filesystem(
     session,
     root: RootType,
     collect_existing_paths: bool = False,
@@ -299,7 +299,7 @@ def reconcile_cache_states_for_root(
         fast_ok = False
         try:
             exists = True
-            fast_ok = check_asset_file_fast(
+            fast_ok = verify_asset_file_unchanged(
                 mtime_db=row.mtime_ns,
                 size_db=acc["size_db"],
                 stat_result=os.stat(row.file_path, follow_symlinks=True),
@@ -385,7 +385,7 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
         for r in roots:
             try:
                 with create_session() as sess:
-                    survivors = reconcile_cache_states_for_root(
+                    survivors = sync_cache_states_with_filesystem(
                         sess,
                         r,
                         collect_existing_paths=True,
@@ -410,9 +410,9 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
         if "models" in roots:
             paths.extend(collect_models_files())
         if "input" in roots:
-            paths.extend(list_tree(folder_paths.get_input_directory()))
+            paths.extend(list_files_recursively(folder_paths.get_input_directory()))
         if "output" in roots:
-            paths.extend(list_tree(folder_paths.get_output_directory()))
+            paths.extend(list_files_recursively(folder_paths.get_output_directory()))
 
         specs: list[dict] = []
         tag_pool: set[str] = set()
@@ -445,7 +445,7 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
         with create_session() as sess:
             if tag_pool:
                 ensure_tags_exist(sess, tag_pool, tag_type="user")
-            result = _seed_from_paths_batch(sess, specs=specs, owner_id="")
+            result = _batch_insert_assets_from_paths(sess, specs=specs, owner_id="")
             created += result["inserted_infos"]
             sess.commit()
 

@@ -13,14 +13,14 @@ from sqlalchemy import select
 
 from app.assets.database.models import Asset, Tag
 from app.database.db import create_session
-from app.assets.helpers import normalize_tags, pick_best_live_path
+from app.assets.helpers import normalize_tags, select_best_live_path
 from app.assets.services.path_utils import compute_relative_filename
 from app.assets.database.queries import (
     get_asset_by_hash,
     get_or_create_asset_info,
     list_cache_states_by_asset_id,
     remove_missing_tag_for_asset_id,
-    replace_asset_info_metadata_projection,
+    set_asset_info_metadata,
     set_asset_info_tags,
     update_asset_info_timestamps,
     upsert_asset,
@@ -180,7 +180,7 @@ def register_existing_asset(
             new_meta["filename"] = computed_filename
 
         if new_meta:
-            replace_asset_info_metadata_projection(
+            set_asset_info_metadata(
                 session,
                 asset_info_id=info.id,
                 user_metadata=new_meta,
@@ -217,7 +217,7 @@ def _validate_tags_exist(session, tags: list[str]) -> None:
 
 def _compute_filename_for_asset(session, asset_id: str) -> str | None:
     """Compute the relative filename for an asset from its cache states."""
-    primary_path = pick_best_live_path(list_cache_states_by_asset_id(session, asset_id=asset_id))
+    primary_path = select_best_live_path(list_cache_states_by_asset_id(session, asset_id=asset_id))
     return compute_relative_filename(primary_path) if primary_path else None
 
 
@@ -240,7 +240,7 @@ def _update_metadata_with_filename(
         new_meta["filename"] = computed_filename
 
     if new_meta != current_meta:
-        replace_asset_info_metadata_projection(
+        set_asset_info_metadata(
             session,
             asset_info_id=asset_info_id,
             user_metadata=new_meta,

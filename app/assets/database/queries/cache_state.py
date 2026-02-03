@@ -7,7 +7,7 @@ from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
 from app.assets.database.models import Asset, AssetCacheState, AssetInfo
-from app.assets.helpers import escape_like_prefix
+from app.assets.helpers import escape_sql_like_string
 
 MAX_BIND_PARAMS = 800
 
@@ -27,7 +27,7 @@ __all__ = [
 ]
 
 
-def _rows_per_stmt(cols: int) -> int:
+def _calculate_rows_per_statement(cols: int) -> int:
     return max(1, MAX_BIND_PARAMS // max(1, cols))
 
 
@@ -115,7 +115,7 @@ def delete_cache_states_outside_prefixes(session: Session, valid_prefixes: list[
 
     def make_prefix_condition(prefix: str):
         base = prefix if prefix.endswith(os.sep) else prefix + os.sep
-        escaped, esc = escape_like_prefix(base)
+        escaped, esc = escape_sql_like_string(base)
         return AssetCacheState.file_path.like(escaped + "%", escape=esc)
 
     matches_valid_prefix = sa.or_(*[make_prefix_condition(p) for p in valid_prefixes])
@@ -175,7 +175,7 @@ def get_cache_states_for_prefixes(
         base = os.path.abspath(p)
         if not base.endswith(os.sep):
             base += os.sep
-        escaped, esc = escape_like_prefix(base)
+        escaped, esc = escape_sql_like_string(base)
         conds.append(AssetCacheState.file_path.like(escaped + "%", escape=esc))
 
     rows = session.execute(
@@ -261,7 +261,7 @@ def bulk_insert_cache_states_ignore_conflicts(
     ins = sqlite.insert(AssetCacheState).on_conflict_do_nothing(
         index_elements=[AssetCacheState.file_path]
     )
-    for chunk in _iter_chunks(rows, _rows_per_stmt(3)):
+    for chunk in _iter_chunks(rows, _calculate_rows_per_statement(3)):
         session.execute(ins, chunk)
 
 

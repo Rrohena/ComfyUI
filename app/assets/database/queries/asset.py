@@ -9,7 +9,7 @@ from app.assets.database.models import Asset
 MAX_BIND_PARAMS = 800
 
 
-def _rows_per_stmt(cols: int) -> int:
+def _calculate_rows_per_statement(cols: int) -> int:
     return max(1, MAX_BIND_PARAMS // max(1, cols))
 
 
@@ -90,5 +90,5 @@ def bulk_insert_assets(
     if not rows:
         return
     ins = sqlite.insert(Asset)
-    for chunk in _iter_chunks(rows, _rows_per_stmt(5)):
+    for chunk in _iter_chunks(rows, _calculate_rows_per_statement(5)):
         session.execute(ins, chunk)

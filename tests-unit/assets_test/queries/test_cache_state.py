@@ -15,7 +15,7 @@ from app.assets.database.queries import (
     bulk_insert_cache_states_ignore_conflicts,
     get_cache_states_by_paths_and_asset_ids,
 )
-from app.assets.helpers import pick_best_live_path, get_utc_now
+from app.assets.helpers import select_best_live_path, get_utc_now
 
 
 def _make_asset(session: Session, hash_val: str | None = None, size: int = 1024) -> Asset:
@@ -71,9 +71,9 @@ class TestListCacheStatesByAssetId:
         assert paths == ["/path/asset1.bin"]
 
 
-class TestPickBestLivePath:
+class TestSelectBestLivePath:
     def test_returns_empty_for_empty_list(self):
-        result = pick_best_live_path([])
+        result = select_best_live_path([])
         assert result == ""
 
     def test_returns_empty_when_no_files_exist(self, session: Session):
@@ -81,7 +81,7 @@ class TestPickBestLivePath:
         state = _make_cache_state(session, asset, "/nonexistent/path.bin")
         session.commit()
 
-        result = pick_best_live_path([state])
+        result = select_best_live_path([state])
         assert result == ""
 
     def test_prefers_verified_path(self, session: Session, tmp_path):
@@ -103,7 +103,7 @@ class TestPickBestLivePath:
         session.commit()
 
         states = [state_unverified, state_verified]
-        result = pick_best_live_path(states)
+        result = select_best_live_path(states)
         assert result == str(verified_file)
 
     def test_falls_back_to_existing_unverified(self, session: Session, tmp_path):
@@ -116,11 +116,11 @@ class TestPickBestLivePath:
         state = _make_cache_state(session, asset, str(existing_file), needs_verify=True)
         session.commit()
 
-        result = pick_best_live_path([state])
+        result = select_best_live_path([state])
         assert result == str(existing_file)
 
 
-class TestPickBestLivePathWithMocking:
+class TestSelectBestLivePathWithMocking:
     def test_handles_missing_file_path_attr(self):
         """Gracefully handle states with None file_path."""
 
@@ -128,7 +128,7 @@ class TestPickBestLivePathWithMocking:
             file_path = None
             needs_verify = False
 
-        result = pick_best_live_path([MockState()])
+        result = select_best_live_path([MockState()])
         assert result == ""
 
 

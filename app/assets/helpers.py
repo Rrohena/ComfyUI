@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Literal, Sequence
 
 
-def pick_best_live_path(states: Sequence) -> str:
+def select_best_live_path(states: Sequence) -> str:
     """
     Return the best on-disk path among cache states:
       1) Prefer a path that exists with needs_verify == False (already verified).
@@ -22,7 +22,7 @@ def pick_best_live_path(states: Sequence) -> str:
 ALLOWED_ROOTS: tuple[Literal["models", "input", "output"], ...] = ("models", "input", "output")
 
 
-def escape_like_prefix(s: str, escape: str = "!") -> tuple[str, str]:
+def escape_sql_like_string(s: str, escape: str = "!") -> tuple[str, str]:
     """Escapes %, _ and the escape char itself in a LIKE prefix.
     Returns (escaped_prefix, escape_char). Caller should append '%' and pass escape=escape_char to .like().
     """

@@ -13,7 +13,7 @@ from typing import Sequence
 
 from app.assets.database.models import Asset
 from app.database.db import create_session
-from app.assets.helpers import pick_best_live_path, get_utc_now
+from app.assets.helpers import select_best_live_path, get_utc_now
 from app.assets.services.path_utils import compute_relative_filename
 from app.assets.database.queries import (
     asset_info_exists_for_asset_id,
@@ -21,7 +21,7 @@ from app.assets.database.queries import (
     fetch_asset_info_asset_and_tags,
     get_asset_info_by_id,
     list_cache_states_by_asset_id,
-    replace_asset_info_metadata_projection,
+    set_asset_info_metadata,
     set_asset_info_preview,
     set_asset_info_tags,
 )
@@ -83,7 +83,7 @@ def update_asset_metadata(
             new_meta = dict(user_metadata)
             if computed_filename:
                 new_meta["filename"] = computed_filename
-            replace_asset_info_metadata_projection(
+            set_asset_info_metadata(
                 session, asset_info_id=asset_info_id, user_metadata=new_meta
             )
             touched = True
@@ -93,7 +93,7 @@ def update_asset_metadata(
                 if current_meta.get("filename") != computed_filename:
                     new_meta = dict(current_meta)
                     new_meta["filename"] = computed_filename
-                    replace_asset_info_metadata_projection(
+                    set_asset_info_metadata(
                         session, asset_info_id=asset_info_id, user_metadata=new_meta
                     )
                     touched = True
@@ -217,5 +217,5 @@ def set_asset_preview(
 
 def _compute_filename_for_asset(session, asset_id: str) -> str | None:
     """Compute the relative filename for an asset from its cache states."""
-    primary_path = pick_best_live_path(list_cache_states_by_asset_id(session, asset_id=asset_id))
+    primary_path = select_best_live_path(list_cache_states_by_asset_id(session, asset_id=asset_id))
     return compute_relative_filename(primary_path) if primary_path else None

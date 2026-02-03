@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.assets.database.models import Asset, AssetInfo, AssetInfoMeta
 from app.assets.database.queries import list_asset_infos_page
-from app.assets.database.queries.asset_info import expand_metadata_to_rows
+from app.assets.database.queries.asset_info import convert_metadata_to_rows
 from app.assets.helpers import get_utc_now
 
 
@@ -35,7 +35,7 @@ def _make_asset_info(
 
     if metadata:
         for key, val in metadata.items():
-            for row in expand_metadata_to_rows(key, val):
+            for row in convert_metadata_to_rows(key, val):
                 meta_row = AssetInfoMeta(
                     asset_info_id=info.id,
                     key=row["key"],

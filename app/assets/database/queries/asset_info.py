@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, contains_eager, noload
 from app.assets.database.models import (
     Asset, AssetInfo, AssetInfoMeta, AssetInfoTag, Tag
 )
-from app.assets.helpers import escape_like_prefix, normalize_tags, get_utc_now
+from app.assets.helpers import escape_sql_like_string, normalize_tags, get_utc_now
 
 
 def check_is_scalar(v):
@@ -31,7 +31,7 @@ def check_is_scalar(v):
     return False
 
 
-def expand_metadata_to_rows(key: str, value):
+def convert_metadata_to_rows(key: str, value):
     """
     Turn a metadata key/value into typed projection rows.
     Returns list[dict] with keys:
@@ -86,7 +86,7 @@ def expand_metadata_to_rows(key: str, value):
 MAX_BIND_PARAMS = 800
 
 
-def _rows_per_stmt(cols: int) -> int:
+def _calculate_rows_per_statement(cols: int) -> int:
     return max(1, MAX_BIND_PARAMS // max(1, cols))
 
 
@@ -296,7 +296,7 @@ def list_asset_infos_page(
     )
 
     if name_contains:
-        escaped, esc = escape_like_prefix(name_contains)
+        escaped, esc = escape_sql_like_string(name_contains)
         base = base.where(AssetInfo.name.ilike(f"%{escaped}%", escape=esc))
 
     base = _apply_tag_filters(base, include_tags, exclude_tags)
@@ -323,7 +323,7 @@ def list_asset_infos_page(
         .where(_build_visible_owner_clause(owner_id))
     )
     if name_contains:
-        escaped, esc = escape_like_prefix(name_contains)
+        escaped, esc = escape_sql_like_string(name_contains)
         count_stmt = count_stmt.where(AssetInfo.name.ilike(f"%{escaped}%", escape=esc))
     count_stmt = _apply_tag_filters(count_stmt, include_tags, exclude_tags)
     count_stmt = _apply_metadata_filter(count_stmt, metadata_filter)
@@ -401,7 +401,7 @@ def fetch_asset_info_and_asset(
     return pair[0], pair[1]
 
 
-def touch_asset_info_by_id(
+def update_asset_info_access_time(
     session: Session,
     asset_info_id: str,
     ts: datetime | None = None,
@@ -416,7 +416,7 @@ def touch_asset_info_by_id(
     session.execute(stmt.values(last_access_time=ts))
 
 
-def replace_asset_info_metadata_projection(
+def set_asset_info_metadata(
     session: Session,
     asset_info_id: str,
     user_metadata: dict | None = None,
@@ -437,7 +437,7 @@ def replace_asset_info_metadata_projection(
 
     rows: list[AssetInfoMeta] = []
     for k, v in user_metadata.items():
-        for r in expand_metadata_to_rows(k, v):
+        for r in convert_metadata_to_rows(k, v):
             rows.append(
                 AssetInfoMeta(
                     asset_info_id=asset_info_id,
@@ -501,7 +501,7 @@ def bulk_insert_asset_infos_ignore_conflicts(
     ins = sqlite.insert(AssetInfo).on_conflict_do_nothing(
         index_elements=[AssetInfo.asset_id, AssetInfo.owner_id, AssetInfo.name]
     )
-    for chunk in _iter_chunks(rows, _rows_per_stmt(9)):
+    for chunk in _iter_chunks(rows, _calculate_rows_per_statement(9)):
         session.execute(ins, chunk)
 
 

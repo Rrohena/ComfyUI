@@ -13,8 +13,8 @@ from app.assets.database.queries import (
     list_asset_infos_page,
     fetch_asset_info_asset_and_tags,
     fetch_asset_info_and_asset,
-    touch_asset_info_by_id,
-    replace_asset_info_metadata_projection,
+    update_asset_info_access_time,
+    set_asset_info_metadata,
     delete_asset_info_by_id,
     set_asset_info_preview,
     bulk_insert_asset_infos_ignore_conflicts,
@@ -196,7 +196,7 @@ class TestFetchAssetInfoAndAsset:
         assert ret_asset.id == asset.id
 
 
-class TestTouchAssetInfoById:
+class TestUpdateAssetInfoAccessTime:
     def test_updates_last_access_time(self, session: Session):
         asset = _make_asset(session, "hash1")
         info = _make_asset_info(session, asset)
@@ -206,7 +206,7 @@ class TestTouchAssetInfoById:
         import time
         time.sleep(0.01)
 
-        touch_asset_info_by_id(session, asset_info_id=info.id)
+        update_asset_info_access_time(session, asset_info_id=info.id)
         session.commit()
 
         session.refresh(info)
@@ -355,13 +355,13 @@ class TestUpdateAssetInfoTimestamps:
         assert info.preview_id == preview_asset.id
 
 
-class TestReplaceAssetInfoMetadataProjection:
+class TestSetAssetInfoMetadata:
     def test_sets_metadata(self, session: Session):
         asset = _make_asset(session, "hash1")
         info = _make_asset_info(session, asset)
         session.commit()
 
-        replace_asset_info_metadata_projection(
+        set_asset_info_metadata(
             session, asset_info_id=info.id, user_metadata={"key": "value"}
         )
         session.commit()
@@ -379,12 +379,12 @@ class TestReplaceAssetInfoMetadataProjection:
         info = _make_asset_info(session, asset)
         session.commit()
 
-        replace_asset_info_metadata_projection(
+        set_asset_info_metadata(
             session, asset_info_id=info.id, user_metadata={"old": "data"}
         )
         session.commit()
 
-        replace_asset_info_metadata_projection(
+        set_asset_info_metadata(
             session, asset_info_id=info.id, user_metadata={"new": "data"}
         )
         session.commit()
@@ -398,12 +398,12 @@ class TestReplaceAssetInfoMetadataProjection:
         info = _make_asset_info(session, asset)
         session.commit()
 
-        replace_asset_info_metadata_projection(
+        set_asset_info_metadata(
             session, asset_info_id=info.id, user_metadata={"key": "value"}
         )
         session.commit()
 
-        replace_asset_info_metadata_projection(
+        set_asset_info_metadata(
             session, asset_info_id=info.id, user_metadata={}
         )
         session.commit()
@@ -415,7 +415,7 @@ class TestReplaceAssetInfoMetadataProjection:
 
     def test_raises_for_nonexistent(self, session: Session):
         with pytest.raises(ValueError, match="not found"):
-            replace_asset_info_metadata_projection(
+            set_asset_info_metadata(
                 session, asset_info_id="nonexistent", user_metadata={"key": "value"}
             )
 

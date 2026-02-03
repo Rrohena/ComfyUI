@@ -7,12 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.assets.database.models import AssetInfo, AssetInfoMeta, AssetInfoTag, Tag
-from app.assets.helpers import escape_like_prefix, normalize_tags, get_utc_now
+from app.assets.helpers import escape_sql_like_string, normalize_tags, get_utc_now
 
 MAX_BIND_PARAMS = 800
 
 
-def _rows_per_stmt(cols: int) -> int:
+def _calculate_rows_per_statement(cols: int) -> int:
     return max(1, MAX_BIND_PARAMS // max(1, cols))
 
 
@@ -262,7 +262,7 @@ def list_tags_with_usage(
     )
 
     if prefix:
-        escaped, esc = escape_like_prefix(prefix.strip().lower())
+        escaped, esc = escape_sql_like_string(prefix.strip().lower())
         q = q.where(Tag.name.like(escaped + "%", escape=esc))
 
     if not include_zero:
@@ -275,7 +275,7 @@ def list_tags_with_usage(
 
     total_q = select(func.count()).select_from(Tag)
     if prefix:
-        escaped, esc = escape_like_prefix(prefix.strip().lower())
+        escaped, esc = escape_sql_like_string(prefix.strip().lower())
         total_q = total_q.where(Tag.name.like(escaped + "%", escape=esc))
     if not include_zero:
         total_q = total_q.where(

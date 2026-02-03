@@ -24,7 +24,7 @@ from app.assets.api.schemas_in import (
     HashMismatchError,
     ParsedUpload,
 )
-from app.assets.api.upload import _cleanup_temp
+from app.assets.api.upload import _delete_temp_file_if_exists
 from app.assets.database.queries import (
     asset_exists_by_hash,
     fetch_asset_info_and_asset,
@@ -32,11 +32,11 @@ from app.assets.database.queries import (
     get_asset_tags,
     list_asset_infos_page,
     list_cache_states_by_asset_id,
-    touch_asset_info_by_id,
+    update_asset_info_access_time,
 )
-from app.assets.helpers import pick_best_live_path
+from app.assets.helpers import select_best_live_path
 from app.assets.services.path_utils import (
-    ensure_within_base,
+    validate_path_within_base,
     resolve_destination_from_tags,
 )
 from app.assets.services import (
@@ -168,11 +168,11 @@ def resolve_asset_content_for_download(
 
         info, asset = pair
         states = list_cache_states_by_asset_id(session, asset_id=asset.id)
-        abs_path = pick_best_live_path(states)
+        abs_path = select_best_live_path(states)
         if not abs_path:
             raise FileNotFoundError
 
-        touch_asset_info_by_id(session, asset_info_id=asset_info_id)
+        update_asset_info_access_time(session, asset_info_id=asset_info_id)
         session.commit()
 
         ctype = asset.mime_type or mimetypes.guess_type(info.name or abs_path)[0] or "application/octet-stream"
@@ -242,7 +242,7 @@ def upload_asset_from_temp_path(
     ext = _ext if 0 < len(_ext) <= 16 else ""
     hashed_basename = f"{digest}{ext}"
     dest_abs = os.path.abspath(os.path.join(dest_dir, hashed_basename))
-    ensure_within_base(dest_abs, base_dir)
+    validate_path_within_base(dest_abs, base_dir)
 
     content_type = (
         mimetypes.guess_type(os.path.basename(src_for_ext), strict=False)[0]
@@ -325,13 +325,13 @@ def process_upload(
             "hash": parsed.provided_hash,
         })
     except ValidationError as ve:
-        _cleanup_temp(parsed.tmp_path)
+        _delete_temp_file_if_exists(parsed.tmp_path)
         raise AssetValidationError("INVALID_BODY", f"Validation failed: {ve.json()}")
 
     # Validate models category against configured folders
     if spec.tags and spec.tags[0] == "models":
         if len(spec.tags) < 2 or spec.tags[1] not in folder_paths.folder_names_and_paths:
-            _cleanup_temp(parsed.tmp_path)
+            _delete_temp_file_if_exists(parsed.tmp_path)
             category = spec.tags[1] if len(spec.tags) >= 2 else ""
             raise AssetValidationError("INVALID_BODY", f"unknown models category '{category}'")
 
@@ -349,7 +349,7 @@ def process_upload(
             raise AssetNotFoundError(f"Asset content {spec.hash} does not exist")
 
         # Drain temp if we accidentally saved (e.g., hash field came after file)
-        _cleanup_temp(parsed.tmp_path)
+        _delete_temp_file_if_exists(parsed.tmp_path)
         return result
 
     # Otherwise, we must have a temp file path to ingest
@@ -365,13 +365,13 @@ def process_upload(
             expected_asset_hash=spec.hash,
         )
     except ValueError as e:
-        _cleanup_temp(parsed.tmp_path)
+        _delete_temp_file_if_exists(parsed.tmp_path)
         msg = str(e)
         if "HASH_MISMATCH" in msg or msg.strip().upper() == "HASH_MISMATCH":
             raise HashMismatchError("Uploaded file hash does not match provided hash.")
         raise AssetValidationError("BAD_REQUEST", "Invalid inputs.")
     except Exception:
-        _cleanup_temp(parsed.tmp_path)
+        _delete_temp_file_if_exists(parsed.tmp_path)
         raise
 
 

@@ -48,7 +48,7 @@ def resolve_destination_from_tags(tags: list[str]) -> tuple[str, list[str]]:
     return base_dir, raw_subdirs if raw_subdirs else []
 
 
-def ensure_within_base(candidate: str, base: str) -> None:
+def validate_path_within_base(candidate: str, base: str) -> None:
     cand_abs = os.path.abspath(candidate)
     base_abs = os.path.abspath(base)
     try:
@@ -69,7 +69,7 @@ def compute_relative_filename(file_path: str) -> str | None:
     NOTE: this is a temporary helper, used only for initializing metadata["filename"] field.
     """
     try:
-        root_category, rel_path = get_relative_to_root_category_path_of_asset(file_path)
+        root_category, rel_path = get_asset_category_and_relative_path(file_path)
     except ValueError:
         return None
 
@@ -85,7 +85,7 @@ def compute_relative_filename(file_path: str) -> str | None:
     return "/".join(parts)  # input/output: keep all parts
 
 
-def get_relative_to_root_category_path_of_asset(file_path: str) -> tuple[Literal["input", "output", "models"], str]:
+def get_asset_category_and_relative_path(file_path: str) -> tuple[Literal["input", "output", "models"], str]:
     """Given an absolute or relative file path, determine which root category the path belongs to:
       - 'input' if the file resides under `folder_paths.get_input_directory()`
       - 'output' if the file resides under `folder_paths.get_output_directory()`
@@ -143,7 +143,7 @@ def get_name_and_tags_from_asset_path(file_path: str) -> tuple[str, list[str]]:
     """Return a tuple (name, tags) derived from a filesystem path.
 
     Semantics:
-      - Root category is determined by `get_relative_to_root_category_path_of_asset`.
+      - Root category is determined by `get_asset_category_and_relative_path`.
       - The returned `name` is the base filename with extension from the relative path.
       - The returned `tags` are:
             [root_category] + parent folders of the relative path (in order)
@@ -155,7 +155,7 @@ def get_name_and_tags_from_asset_path(file_path: str) -> tuple[str, list[str]]:
     Raises:
         ValueError: if the path does not belong to input, output, or configured model bases.
     """
-    root_category, some_path = get_relative_to_root_category_path_of_asset(file_path)
+    root_category, some_path = get_asset_category_and_relative_path(file_path)
     p = Path(some_path)
     parent_parts = [part for part in p.parent.parts if part not in (".", "..", p.anchor)]
     return p.name, list(dict.fromkeys(normalize_tags([root_category, *parent_parts])))

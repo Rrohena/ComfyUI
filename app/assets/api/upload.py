@@ -13,7 +13,7 @@ import folder_paths
 from app.assets.api.schemas_in import ParsedUpload, UploadError
 
 
-def validate_hash_format(s: str) -> str:
+def normalize_and_validate_hash(s: str) -> str:
     """
     Validate and normalize a hash string.
 
@@ -77,7 +77,7 @@ async def parse_multipart_upload(
                 raise UploadError(400, "INVALID_HASH", "hash must be like 'blake3:<hex>'")
 
             if s:
-                provided_hash = validate_hash_format(s)
+                provided_hash = normalize_and_validate_hash(s)
                 try:
                     provided_hash_exists = check_hash_exists(provided_hash)
                 except Exception:
@@ -114,7 +114,7 @@ async def parse_multipart_upload(
                         f.write(chunk)
                         file_written += len(chunk)
             except Exception:
-                _cleanup_temp(tmp_path)
+                _delete_temp_file_if_exists(tmp_path)
                 raise UploadError(500, "UPLOAD_IO_ERROR", "Failed to receive and store uploaded file.")
 
         elif fname == "tags":
@@ -129,7 +129,7 @@ async def parse_multipart_upload(
         raise UploadError(400, "MISSING_FILE", "Form must include a 'file' part or a known 'hash'.")
 
     if file_present and file_written == 0 and not (provided_hash and provided_hash_exists):
-        _cleanup_temp(tmp_path)
+        _delete_temp_file_if_exists(tmp_path)
         raise UploadError(400, "EMPTY_UPLOAD", "Uploaded file is empty.")
 
     return ParsedUpload(
@@ -145,7 +145,7 @@ async def parse_multipart_upload(
     )
 
 
-def _cleanup_temp(tmp_path: str | None) -> None:
+def _delete_temp_file_if_exists(tmp_path: str | None) -> None:
     """Safely remove a temp file if it exists."""
     if tmp_path:
         try:
