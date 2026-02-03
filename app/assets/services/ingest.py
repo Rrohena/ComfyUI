@@ -13,12 +13,8 @@ from sqlalchemy import select
 
 from app.assets.database.models import Asset, Tag
 from app.database.db import create_session
-from app.assets.helpers import (
-    compute_relative_filename,
-    normalize_tags,
-    pick_best_live_path,
-    utcnow,
-)
+from app.assets.helpers import normalize_tags, pick_best_live_path, utcnow
+from app.assets.services.path_utils import compute_relative_filename
 from app.assets.database.queries import (
     get_asset_by_hash,
     get_or_create_asset_info,

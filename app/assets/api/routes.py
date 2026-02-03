@@ -10,8 +10,8 @@ from pydantic import ValidationError
 import app.assets.manager as manager
 from app import user_manager
 from app.assets.api import schemas_in
-from app.assets.helpers import get_query_dict
 from app.assets.services.scanner import seed_assets
+from typing import Any
 
 import folder_paths
 
@@ -20,6 +20,18 @@ USER_MANAGER: user_manager.UserManager | None = None
 
 # UUID regex (canonical hyphenated form, case-insensitive)
 UUID_RE = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+
+def get_query_dict(request: web.Request) -> dict[str, Any]:
+    """
+    Gets a dictionary of query parameters from the request.
+
+    'request.query' is a MultiMapping[str], needs to be converted to a dictionary to be validated by Pydantic.
+    """
+    query_dict = {
+        key: request.query.getall(key) if len(request.query.getall(key)) > 1 else request.query.get(key)
+        for key in request.query.keys()
+    }
+    return query_dict
 
 # Note to any custom node developers reading this code:
 # The assets system is not yet fully implemented, do not rely on the code in /app/assets remaining the same.

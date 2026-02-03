@@ -26,9 +26,9 @@ from app.assets.database.queries import (
     list_cache_states_by_asset_id,
     touch_asset_info_by_id,
 )
-from app.assets.helpers import (
+from app.assets.helpers import pick_best_live_path
+from app.assets.services.path_utils import (
     ensure_within_base,
-    pick_best_live_path,
     resolve_destination_from_tags,
 )
 from app.assets.services import (

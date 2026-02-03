@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import uuid
+from typing import Literal
 
 import folder_paths
 from sqlalchemy.orm import Session
@@ -25,17 +26,88 @@ from app.assets.database.queries import (
     get_asset_info_ids_by_ids,
     bulk_insert_tags_and_meta,
 )
-from app.assets.helpers import (
-    collect_models_files,
-    compute_relative_filename,
-    fast_asset_file_check,
-    get_name_and_tags_from_asset_path,
-    list_tree,
-    prefixes_for_root,
-    RootType,
-    utcnow,
-)
+from app.assets.helpers import utcnow
+from app.assets.services.path_utils import compute_relative_filename, get_name_and_tags_from_asset_path
 from app.database.db import create_session, dependencies_available
+
+
+RootType = Literal["models", "input", "output"]
+
+
+def fast_asset_file_check(
+    mtime_db: int | None,
+    size_db: int | None,
+    stat_result: os.stat_result,
+) -> bool:
+    if mtime_db is None:
+        return False
+    actual_mtime_ns = getattr(stat_result, "st_mtime_ns", int(stat_result.st_mtime * 1_000_000_000))
+    if int(mtime_db) != int(actual_mtime_ns):
+        return False
+    sz = int(size_db or 0)
+    if sz > 0:
+        return int(stat_result.st_size) == sz
+    return True
+
+
+def list_tree(base_dir: str) -> list[str]:
+    out: list[str] = []
+    base_abs = os.path.abspath(base_dir)
+    if not os.path.isdir(base_abs):
+        return out
+    for dirpath, _subdirs, filenames in os.walk(base_abs, topdown=True, followlinks=False):
+        for name in filenames:
+            out.append(os.path.abspath(os.path.join(dirpath, name)))
+    return out
+
+
+def get_comfy_models_folders() -> list[tuple[str, list[str]]]:
+    """Build a list of (folder_name, base_paths[]) categories that are configured for model locations.
+
+    We trust `folder_paths.folder_names_and_paths` and include a category if
+    *any* of its base paths lies under the Comfy `models_dir`.
+    """
+    targets: list[tuple[str, list[str]]] = []
+    models_root = os.path.abspath(folder_paths.models_dir)
+    for name, values in folder_paths.folder_names_and_paths.items():
+        paths, _exts = values[0], values[1]  # NOTE: this prevents nodepacks that hackily edit folder_... from breaking ComfyUI
+        if any(os.path.abspath(p).startswith(models_root + os.sep) for p in paths):
+            targets.append((name, paths))
+    return targets
+
+
+def prefixes_for_root(root: RootType) -> list[str]:
+    if root == "models":
+        bases: list[str] = []
+        for _bucket, paths in get_comfy_models_folders():
+            bases.extend(paths)
+        return [os.path.abspath(p) for p in bases]
+    if root == "input":
+        return [os.path.abspath(folder_paths.get_input_directory())]
+    if root == "output":
+        return [os.path.abspath(folder_paths.get_output_directory())]
+    return []
+
+
+def collect_models_files() -> list[str]:
+    out: list[str] = []
+    for folder_name, bases in get_comfy_models_folders():
+        rel_files = folder_paths.get_filename_list(folder_name) or []
+        for rel_path in rel_files:
+            abs_path = folder_paths.get_full_path(folder_name, rel_path)
+            if not abs_path:
+                continue
+            abs_path = os.path.abspath(abs_path)
+            allowed = False
+            for b in bases:
+                base_abs = os.path.abspath(b)
+                with contextlib.suppress(Exception):
+                    if os.path.commonpath([abs_path, base_abs]) == base_abs:
+                        allowed = True
+                        break
+            if allowed:
+                out.append(abs_path)
+    return out
 
 
 def _seed_from_paths_batch(
