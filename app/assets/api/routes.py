@@ -38,6 +38,7 @@ USER_MANAGER: user_manager.UserManager | None = None
 # UUID regex (canonical hyphenated form, case-insensitive)
 UUID_RE = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 
+
 def get_query_dict(request: web.Request) -> dict[str, Any]:
     """
     Gets a dictionary of query parameters from the request.
@@ -45,21 +46,33 @@ def get_query_dict(request: web.Request) -> dict[str, Any]:
     'request.query' is a MultiMapping[str], needs to be converted to a dictionary to be validated by Pydantic.
     """
     query_dict = {
-        key: request.query.getall(key) if len(request.query.getall(key)) > 1 else request.query.get(key)
+        key: request.query.getall(key)
+        if len(request.query.getall(key)) > 1
+        else request.query.get(key)
         for key in request.query.keys()
     }
     return query_dict
 
+
 # Note to any custom node developers reading this code:
 # The assets system is not yet fully implemented, do not rely on the code in /app/assets remaining the same.
 
-def register_assets_system(app: web.Application, user_manager_instance: user_manager.UserManager) -> None:
+
+def register_assets_system(
+    app: web.Application, user_manager_instance: user_manager.UserManager
+) -> None:
     global USER_MANAGER
     USER_MANAGER = user_manager_instance
     app.add_routes(ROUTES)
 
-def _build_error_response(status: int, code: str, message: str, details: dict | None = None) -> web.Response:
-    return web.json_response({"error": {"code": code, "message": message, "details": details or {}}}, status=status)
+
+def _build_error_response(
+    status: int, code: str, message: str, details: dict | None = None
+) -> web.Response:
+    return web.json_response(
+        {"error": {"code": code, "message": message, "details": details or {}}},
+        status=status,
+    )
 
 
 def _build_validation_error_response(code: str, ve: ValidationError) -> web.Response:
@@ -79,10 +92,18 @@ def _validate_sort_field(requested: str | None) -> str:
 async def head_asset_by_hash(request: web.Request) -> web.Response:
     hash_str = request.match_info.get("hash", "").strip().lower()
     if not hash_str or ":" not in hash_str:
-        return _build_error_response(400, "INVALID_HASH", "hash must be like 'blake3:<hex>'")
+        return _build_error_response(
+            400, "INVALID_HASH", "hash must be like 'blake3:<hex>'"
+        )
     algo, digest = hash_str.split(":", 1)
-    if algo != "blake3" or not digest or any(c for c in digest if c not in "0123456789abcdef"):
-        return _build_error_response(400, "INVALID_HASH", "hash must be like 'blake3:<hex>'")
+    if (
+        algo != "blake3"
+        or not digest
+        or any(c for c in digest if c not in "0123456789abcdef")
+    ):
+        return _build_error_response(
+            400, "INVALID_HASH", "hash must be like 'blake3:<hex>'"
+        )
     exists = asset_exists(hash_str)
     return web.Response(status=200 if exists else 404)
 
@@ -99,7 +120,11 @@ async def list_assets_route(request: web.Request) -> web.Response:
         return _build_validation_error_response("INVALID_QUERY", ve)
 
     sort = _validate_sort_field(q.sort)
-    order = "desc" if (q.order or "desc").lower() not in {"asc", "desc"} else q.order.lower()
+    order = (
+        "desc"
+        if (q.order or "desc").lower() not in {"asc", "desc"}
+        else q.order.lower()
+    )
 
     result = list_assets_page(
         owner_id=USER_MANAGER.get_request_user_id(request),
@@ -118,7 +143,9 @@ async def list_assets_route(request: web.Request) -> web.Response:
             id=item.info.id,
             name=item.info.name,
             asset_hash=item.asset.hash if item.asset else None,
-            size=int(item.asset.size_bytes) if item.asset and item.asset.size_bytes else None,
+            size=int(item.asset.size_bytes)
+            if item.asset and item.asset.size_bytes
+            else None,
             mime_type=item.asset.mime_type if item.asset else None,
             tags=item.tags,
             created_at=item.info.created_at,
@@ -148,13 +175,20 @@ async def get_asset_route(request: web.Request) -> web.Response:
             owner_id=USER_MANAGER.get_request_user_id(request),
         )
         if not result:
-            return _build_error_response(404, "ASSET_NOT_FOUND", f"AssetInfo {asset_info_id} not found", {"id": asset_info_id})
+            return _build_error_response(
+                404,
+                "ASSET_NOT_FOUND",
+                f"AssetInfo {asset_info_id} not found",
+                {"id": asset_info_id},
+            )
 
         payload = schemas_out.AssetDetail(
             id=result.info.id,
             name=result.info.name,
             asset_hash=result.asset.hash if result.asset else None,
-            size=int(result.asset.size_bytes) if result.asset and result.asset.size_bytes is not None else None,
+            size=int(result.asset.size_bytes)
+            if result.asset and result.asset.size_bytes is not None
+            else None,
             mime_type=result.asset.mime_type if result.asset else None,
             tags=result.tags,
             user_metadata=result.info.user_metadata or {},
@@ -163,7 +197,9 @@ async def get_asset_route(request: web.Request) -> web.Response:
             last_access_time=result.info.last_access_time,
         )
     except ValueError as e:
-        return _build_error_response(404, "ASSET_NOT_FOUND", str(e), {"id": asset_info_id})
+        return _build_error_response(
+            404, "ASSET_NOT_FOUND", str(e), {"id": asset_info_id}
+        )
     except Exception:
         logging.exception(
             "get_asset failed for asset_info_id=%s, owner_id=%s",
@@ -193,10 +229,12 @@ async def download_asset_content(request: web.Request) -> web.Response:
     except NotImplementedError as nie:
         return _build_error_response(501, "BACKEND_UNSUPPORTED", str(nie))
     except FileNotFoundError:
-        return _build_error_response(404, "FILE_NOT_FOUND", "Underlying file not found on disk.")
+        return _build_error_response(
+            404, "FILE_NOT_FOUND", "Underlying file not found on disk."
+        )
 
     quoted = (filename or "").replace("\r", "").replace("\n", "").replace('"', "'")
-    cd = f'{disposition}; filename="{quoted}"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'
+    cd = f"{disposition}; filename=\"{quoted}\"; filename*=UTF-8''{urllib.parse.quote(filename)}"
 
     file_size = os.path.getsize(abs_path)
     logging.info(
@@ -235,7 +273,9 @@ async def create_asset_from_hash_route(request: web.Request) -> web.Response:
     except ValidationError as ve:
         return _build_validation_error_response("INVALID_BODY", ve)
     except Exception:
-        return _build_error_response(400, "INVALID_JSON", "Request body must be valid JSON.")
+        return _build_error_response(
+            400, "INVALID_JSON", "Request body must be valid JSON."
+        )
 
     result = create_from_hash(
         hash_str=body.hash,
@@ -245,7 +285,9 @@ async def create_asset_from_hash_route(request: web.Request) -> web.Response:
         owner_id=USER_MANAGER.get_request_user_id(request),
     )
     if result is None:
-        return _build_error_response(404, "ASSET_NOT_FOUND", f"Asset content {body.hash} does not exist")
+        return _build_error_response(
+            404, "ASSET_NOT_FOUND", f"Asset content {body.hash} does not exist"
+        )
 
     payload_out = schemas_out.AssetCreated(
         id=result.info.id,
@@ -282,21 +324,30 @@ async def upload_asset(request: web.Request) -> web.Response:
     owner_id = USER_MANAGER.get_request_user_id(request)
 
     try:
-        spec = schemas_in.UploadAssetSpec.model_validate({
-            "tags": parsed.tags_raw,
-            "name": parsed.provided_name,
-            "user_metadata": parsed.user_metadata_raw,
-            "hash": parsed.provided_hash,
-        })
+        spec = schemas_in.UploadAssetSpec.model_validate(
+            {
+                "tags": parsed.tags_raw,
+                "name": parsed.provided_name,
+                "user_metadata": parsed.user_metadata_raw,
+                "hash": parsed.provided_hash,
+            }
+        )
     except ValidationError as ve:
         _delete_temp_file_if_exists(parsed.tmp_path)
-        return _build_error_response(400, "INVALID_BODY", f"Validation failed: {ve.json()}")
+        return _build_error_response(
+            400, "INVALID_BODY", f"Validation failed: {ve.json()}"
+        )
 
     if spec.tags and spec.tags[0] == "models":
-        if len(spec.tags) < 2 or spec.tags[1] not in folder_paths.folder_names_and_paths:
+        if (
+            len(spec.tags) < 2
+            or spec.tags[1] not in folder_paths.folder_names_and_paths
+        ):
             _delete_temp_file_if_exists(parsed.tmp_path)
             category = spec.tags[1] if len(spec.tags) >= 2 else ""
-            return _build_error_response(400, "INVALID_BODY", f"unknown models category '{category}'")
+            return _build_error_response(
+                400, "INVALID_BODY", f"unknown models category '{category}'"
+            )
 
     try:
         # Fast path: if a valid provided hash exists, create AssetInfo without writing anything
@@ -310,12 +361,18 @@ async def upload_asset(request: web.Request) -> web.Response:
             )
             if result is None:
                 _delete_temp_file_if_exists(parsed.tmp_path)
-                return _build_error_response(404, "ASSET_NOT_FOUND", f"Asset content {spec.hash} does not exist")
+                return _build_error_response(
+                    404, "ASSET_NOT_FOUND", f"Asset content {spec.hash} does not exist"
+                )
             _delete_temp_file_if_exists(parsed.tmp_path)
         else:
             # Otherwise, we must have a temp file path to ingest
             if not parsed.tmp_path or not os.path.exists(parsed.tmp_path):
-                return _build_error_response(404, "ASSET_NOT_FOUND", "Provided hash not found and no file uploaded.")
+                return _build_error_response(
+                    404,
+                    "ASSET_NOT_FOUND",
+                    "Provided hash not found and no file uploaded.",
+                )
 
             result = upload_from_temp_path(
                 temp_path=parsed.tmp_path,
@@ -365,7 +422,9 @@ async def update_asset_route(request: web.Request) -> web.Response:
     except ValidationError as ve:
         return _build_validation_error_response("INVALID_BODY", ve)
     except Exception:
-        return _build_error_response(400, "INVALID_JSON", "Request body must be valid JSON.")
+        return _build_error_response(
+            400, "INVALID_JSON", "Request body must be valid JSON."
+        )
 
     try:
         result = update_asset_metadata(
@@ -383,7 +442,9 @@ async def update_asset_route(request: web.Request) -> web.Response:
             updated_at=result.info.updated_at,
         )
     except (ValueError, PermissionError) as ve:
-        return _build_error_response(404, "ASSET_NOT_FOUND", str(ve), {"id": asset_info_id})
+        return _build_error_response(
+            404, "ASSET_NOT_FOUND", str(ve), {"id": asset_info_id}
+        )
     except Exception:
         logging.exception(
             "update_asset failed for asset_info_id=%s, owner_id=%s",
@@ -398,7 +459,11 @@ async def update_asset_route(request: web.Request) -> web.Response:
 async def delete_asset_route(request: web.Request) -> web.Response:
     asset_info_id = str(uuid.UUID(request.match_info["id"]))
     delete_content_param = request.query.get("delete_content")
-    delete_content = True if delete_content_param is None else delete_content_param.lower() not in {"0", "false", "no"}
+    delete_content = (
+        True
+        if delete_content_param is None
+        else delete_content_param.lower() not in {"0", "false", "no"}
+    )
 
     try:
         deleted = delete_asset_reference(
@@ -415,7 +480,9 @@ async def delete_asset_route(request: web.Request) -> web.Response:
         return _build_error_response(500, "INTERNAL", "Unexpected server error.")
 
     if not deleted:
-        return _build_error_response(404, "ASSET_NOT_FOUND", f"AssetInfo {asset_info_id} not found.")
+        return _build_error_response(
+            404, "ASSET_NOT_FOUND", f"AssetInfo {asset_info_id} not found."
+        )
     return web.Response(status=204)
 
 
@@ -430,7 +497,13 @@ async def get_tags(request: web.Request) -> web.Response:
         query = schemas_in.TagsListQuery.model_validate(query_map)
     except ValidationError as e:
         return web.json_response(
-            {"error": {"code": "INVALID_QUERY", "message": "Invalid query parameters", "details": e.errors()}},
+            {
+                "error": {
+                    "code": "INVALID_QUERY",
+                    "message": "Invalid query parameters",
+                    "details": e.errors(),
+                }
+            },
             status=400,
         )
 
@@ -443,8 +516,13 @@ async def get_tags(request: web.Request) -> web.Response:
         owner_id=USER_MANAGER.get_request_user_id(request),
     )
 
-    tags = [schemas_out.TagUsage(name=name, count=count, type=tag_type) for (name, tag_type, count) in rows]
-    payload = schemas_out.TagsList(tags=tags, total=total, has_more=(query.offset + len(tags)) < total)
+    tags = [
+        schemas_out.TagUsage(name=name, count=count, type=tag_type)
+        for (name, tag_type, count) in rows
+    ]
+    payload = schemas_out.TagsList(
+        tags=tags, total=total, has_more=(query.offset + len(tags)) < total
+    )
     return web.json_response(payload.model_dump(mode="json"))
 
 
@@ -455,9 +533,16 @@ async def add_asset_tags(request: web.Request) -> web.Response:
         json_payload = await request.json()
         data = schemas_in.TagsAdd.model_validate(json_payload)
     except ValidationError as ve:
-        return _build_error_response(400, "INVALID_BODY", "Invalid JSON body for tags add.", {"errors": ve.errors()})
+        return _build_error_response(
+            400,
+            "INVALID_BODY",
+            "Invalid JSON body for tags add.",
+            {"errors": ve.errors()},
+        )
     except Exception:
-        return _build_error_response(400, "INVALID_JSON", "Request body must be valid JSON.")
+        return _build_error_response(
+            400, "INVALID_JSON", "Request body must be valid JSON."
+        )
 
     try:
         result = apply_tags(
@@ -472,7 +557,9 @@ async def add_asset_tags(request: web.Request) -> web.Response:
             total_tags=result.total_tags,
         )
     except (ValueError, PermissionError) as ve:
-        return _build_error_response(404, "ASSET_NOT_FOUND", str(ve), {"id": asset_info_id})
+        return _build_error_response(
+            404, "ASSET_NOT_FOUND", str(ve), {"id": asset_info_id}
+        )
     except Exception:
         logging.exception(
             "add_tags_to_asset failed for asset_info_id=%s, owner_id=%s",
@@ -491,9 +578,16 @@ async def delete_asset_tags(request: web.Request) -> web.Response:
         json_payload = await request.json()
         data = schemas_in.TagsRemove.model_validate(json_payload)
     except ValidationError as ve:
-        return _build_error_response(400, "INVALID_BODY", "Invalid JSON body for tags remove.", {"errors": ve.errors()})
+        return _build_error_response(
+            400,
+            "INVALID_BODY",
+            "Invalid JSON body for tags remove.",
+            {"errors": ve.errors()},
+        )
     except Exception:
-        return _build_error_response(400, "INVALID_JSON", "Request body must be valid JSON.")
+        return _build_error_response(
+            400, "INVALID_JSON", "Request body must be valid JSON."
+        )
 
     try:
         result = remove_tags(
@@ -507,7 +601,9 @@ async def delete_asset_tags(request: web.Request) -> web.Response:
             total_tags=result.total_tags,
         )
     except ValueError as ve:
-        return _build_error_response(404, "ASSET_NOT_FOUND", str(ve), {"id": asset_info_id})
+        return _build_error_response(
+            404, "ASSET_NOT_FOUND", str(ve), {"id": asset_info_id}
+        )
     except Exception:
         logging.exception(
             "remove_tags_from_asset failed for asset_info_id=%s, owner_id=%s",

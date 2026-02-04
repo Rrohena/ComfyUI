@@ -15,7 +15,6 @@ from app.assets.database.queries import (
     get_asset_by_hash,
     get_asset_tags,
     get_or_create_asset_info,
-    list_cache_states_by_asset_id,
     remove_missing_tag_for_asset_id,
     set_asset_info_metadata,
     set_asset_info_tags,
@@ -23,9 +22,9 @@ from app.assets.database.queries import (
     upsert_asset,
     upsert_cache_state,
 )
-from app.assets.helpers import normalize_tags, select_best_live_path
+from app.assets.helpers import normalize_tags
 from app.assets.services.path_utils import (
-    compute_relative_filename,
+    compute_filename_for_asset,
     resolve_destination_from_tags,
     validate_path_within_base,
 )
@@ -92,7 +91,9 @@ def ingest_file_from_path(
             if info_created:
                 asset_info_id = info.id
             else:
-                update_asset_info_timestamps(session, asset_info=info, preview_id=preview_id)
+                update_asset_info_timestamps(
+                    session, asset_info=info, preview_id=preview_id
+                )
                 asset_info_id = info.id
 
             norm = normalize_tags(list(tags))
@@ -165,7 +166,7 @@ def register_existing_asset(
             return result
 
         new_meta = dict(user_metadata or {})
-        computed_filename = _compute_filename_for_asset(session, asset.id)
+        computed_filename = compute_filename_for_asset(session, asset.id)
         if computed_filename:
             new_meta["filename"] = computed_filename
 
@@ -199,16 +200,12 @@ def register_existing_asset(
 
 def _validate_tags_exist(session: Session, tags: list[str]) -> None:
     existing_tag_names = set(
-        name for (name,) in session.execute(select(Tag.name).where(Tag.name.in_(tags))).all()
+        name
+        for (name,) in session.execute(select(Tag.name).where(Tag.name.in_(tags))).all()
     )
     missing = [t for t in tags if t not in existing_tag_names]
     if missing:
         raise ValueError(f"Unknown tags: {missing}")
-
-
-def _compute_filename_for_asset(session: Session, asset_id: str) -> str | None:
-    primary_path = select_best_live_path(list_cache_states_by_asset_id(session, asset_id=asset_id))
-    return compute_relative_filename(primary_path) if primary_path else None
 
 
 def _update_metadata_with_filename(
@@ -218,7 +215,7 @@ def _update_metadata_with_filename(
     info: AssetInfo,
     user_metadata: UserMetadata,
 ) -> None:
-    computed_filename = _compute_filename_for_asset(session, asset_id)
+    computed_filename = compute_filename_for_asset(session, asset_id)
 
     current_meta = info.user_metadata or {}
     new_meta = dict(current_meta)
@@ -346,7 +343,9 @@ def upload_from_temp_path(
         raise RuntimeError("failed to create asset metadata")
 
     with create_session() as session:
-        pair = fetch_asset_info_and_asset(session, asset_info_id=info_id, owner_id=owner_id)
+        pair = fetch_asset_info_and_asset(
+            session, asset_info_id=info_id, owner_id=owner_id
+        )
         if not pair:
             raise RuntimeError("inconsistent DB state after ingest")
         info, asset = pair
@@ -376,7 +375,9 @@ def create_from_hash(
 
     result = register_existing_asset(
         asset_hash=canonical,
-        name=_sanitize_filename(name, fallback=canonical.split(":", 1)[1] if ":" in canonical else canonical),
+        name=_sanitize_filename(
+            name, fallback=canonical.split(":", 1)[1] if ":" in canonical else canonical
+        ),
         user_metadata=user_metadata or {},
         tags=tags or [],
         tag_origin="manual",

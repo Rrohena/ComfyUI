@@ -7,33 +7,12 @@ from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
 from app.assets.database.models import Asset, AssetCacheState, AssetInfo
+from app.assets.database.queries.common import (
+    MAX_BIND_PARAMS,
+    calculate_rows_per_statement,
+    iter_chunks,
+)
 from app.assets.helpers import escape_sql_like_string
-
-MAX_BIND_PARAMS = 800
-
-__all__ = [
-    "CacheStateRow",
-    "list_cache_states_by_asset_id",
-    "upsert_cache_state",
-    "delete_cache_states_outside_prefixes",
-    "get_orphaned_seed_asset_ids",
-    "delete_assets_by_ids",
-    "get_cache_states_for_prefixes",
-    "bulk_set_needs_verify",
-    "delete_cache_states_by_ids",
-    "delete_orphaned_seed_asset",
-    "bulk_insert_cache_states_ignore_conflicts",
-    "get_cache_states_by_paths_and_asset_ids",
-]
-
-
-def _calculate_rows_per_statement(cols: int) -> int:
-    return max(1, MAX_BIND_PARAMS // max(1, cols))
-
-
-def _iter_chunks(seq, n: int):
-    for i in range(0, len(seq), n):
-        yield seq[i : i + n]
 
 
 class CacheStateRow(NamedTuple):
@@ -52,12 +31,16 @@ def list_cache_states_by_asset_id(
     session: Session, *, asset_id: str
 ) -> Sequence[AssetCacheState]:
     return (
-        session.execute(
-            select(AssetCacheState)
-            .where(AssetCacheState.asset_id == asset_id)
-            .order_by(AssetCacheState.id.asc())
+        (
+            session.execute(
+                select(AssetCacheState)
+                .where(AssetCacheState.asset_id == asset_id)
+                .order_by(AssetCacheState.id.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
 
 def upsert_cache_state(
@@ -100,7 +83,9 @@ def upsert_cache_state(
     return False, updated
 
 
-def delete_cache_states_outside_prefixes(session: Session, valid_prefixes: list[str]) -> int:
+def delete_cache_states_outside_prefixes(
+    session: Session, valid_prefixes: list[str]
+) -> int:
     """Delete cache states with file_path not matching any of the valid prefixes.
 
     Args:
@@ -261,7 +246,7 @@ def bulk_insert_cache_states_ignore_conflicts(
     ins = sqlite.insert(AssetCacheState).on_conflict_do_nothing(
         index_elements=[AssetCacheState.file_path]
     )
-    for chunk in _iter_chunks(rows, _calculate_rows_per_statement(3)):
+    for chunk in iter_chunks(rows, calculate_rows_per_statement(3)):
         session.execute(ins, chunk)
 
 
@@ -283,7 +268,7 @@ def get_cache_states_by_paths_and_asset_ids(
     paths = list(path_to_asset.keys())
     winners: set[str] = set()
 
-    for chunk in _iter_chunks(paths, MAX_BIND_PARAMS):
+    for chunk in iter_chunks(paths, MAX_BIND_PARAMS):
         result = session.execute(
             select(AssetCacheState.file_path).where(
                 AssetCacheState.file_path.in_(chunk),

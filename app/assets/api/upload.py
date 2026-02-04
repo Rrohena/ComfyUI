@@ -19,7 +19,11 @@ def normalize_and_validate_hash(s: str) -> str:
     if ":" not in s:
         raise UploadError(400, "INVALID_HASH", "hash must be like 'blake3:<hex>'")
     algo, digest = s.split(":", 1)
-    if algo != "blake3" or not digest or any(c for c in digest if c not in "0123456789abcdef"):
+    if (
+        algo != "blake3"
+        or not digest
+        or any(c for c in digest if c not in "0123456789abcdef")
+    ):
         raise UploadError(400, "INVALID_HASH", "hash must be like 'blake3:<hex>'")
     return f"{algo}:{digest}"
 
@@ -42,7 +46,9 @@ async def parse_multipart_upload(
         UploadError: On validation or I/O errors
     """
     if not (request.content_type or "").lower().startswith("multipart/"):
-        raise UploadError(415, "UNSUPPORTED_MEDIA_TYPE", "Use multipart/form-data for uploads.")
+        raise UploadError(
+            415, "UNSUPPORTED_MEDIA_TYPE", "Use multipart/form-data for uploads."
+        )
 
     reader = await request.multipart()
 
@@ -68,7 +74,9 @@ async def parse_multipart_upload(
             try:
                 s = ((await field.text()) or "").strip().lower()
             except Exception:
-                raise UploadError(400, "INVALID_HASH", "hash must be like 'blake3:<hex>'")
+                raise UploadError(
+                    400, "INVALID_HASH", "hash must be like 'blake3:<hex>'"
+                )
 
             if s:
                 provided_hash = normalize_and_validate_hash(s)
@@ -90,7 +98,9 @@ async def parse_multipart_upload(
                             break
                         file_written += len(chunk)
                 except Exception:
-                    raise UploadError(500, "UPLOAD_IO_ERROR", "Failed to receive uploaded file.")
+                    raise UploadError(
+                        500, "UPLOAD_IO_ERROR", "Failed to receive uploaded file."
+                    )
                 continue
 
             uploads_root = os.path.join(folder_paths.get_temp_directory(), "uploads")
@@ -108,7 +118,9 @@ async def parse_multipart_upload(
                         file_written += len(chunk)
             except Exception:
                 _delete_temp_file_if_exists(tmp_path)
-                raise UploadError(500, "UPLOAD_IO_ERROR", "Failed to receive and store uploaded file.")
+                raise UploadError(
+                    500, "UPLOAD_IO_ERROR", "Failed to receive and store uploaded file."
+                )
 
         elif fname == "tags":
             tags_raw.append((await field.text()) or "")
@@ -118,9 +130,15 @@ async def parse_multipart_upload(
             user_metadata_raw = (await field.text()) or None
 
     if not file_present and not (provided_hash and provided_hash_exists):
-        raise UploadError(400, "MISSING_FILE", "Form must include a 'file' part or a known 'hash'.")
+        raise UploadError(
+            400, "MISSING_FILE", "Form must include a 'file' part or a known 'hash'."
+        )
 
-    if file_present and file_written == 0 and not (provided_hash and provided_hash_exists):
+    if (
+        file_present
+        and file_written == 0
+        and not (provided_hash and provided_hash_exists)
+    ):
         _delete_temp_file_if_exists(tmp_path)
         raise UploadError(400, "EMPTY_UPLOAD", "Uploaded file is empty.")
 

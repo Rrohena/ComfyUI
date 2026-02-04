@@ -15,7 +15,10 @@ def get_comfy_models_folders() -> list[tuple[str, list[str]]]:
     targets: list[tuple[str, list[str]]] = []
     models_root = os.path.abspath(folder_paths.models_dir)
     for name, values in folder_paths.folder_names_and_paths.items():
-        paths, _exts = values[0], values[1]  # NOTE: this prevents nodepacks that hackily edit folder_... from breaking ComfyUI
+        paths, _exts = (
+            values[0],
+            values[1],
+        )  # NOTE: this prevents nodepacks that hackily edit folder_... from breaking ComfyUI
         if any(os.path.abspath(p).startswith(models_root + os.sep) for p in paths):
             targets.append((name, paths))
     return targets
@@ -37,7 +40,9 @@ def resolve_destination_from_tags(tags: list[str]) -> tuple[str, list[str]]:
         raw_subdirs = tags[2:]
     else:
         base_dir = os.path.abspath(
-            folder_paths.get_input_directory() if root == "input" else folder_paths.get_output_directory()
+            folder_paths.get_input_directory()
+            if root == "input"
+            else folder_paths.get_output_directory()
         )
         raw_subdirs = tags[1:]
     for i in raw_subdirs:
@@ -84,7 +89,9 @@ def compute_relative_filename(file_path: str) -> str | None:
     return "/".join(parts)  # input/output: keep all parts
 
 
-def get_asset_category_and_relative_path(file_path: str) -> tuple[Literal["input", "output", "models"], str]:
+def get_asset_category_and_relative_path(
+    file_path: str,
+) -> tuple[Literal["input", "output", "models"], str]:
     """Given an absolute or relative file path, determine which root category the path belongs to:
       - 'input' if the file resides under `folder_paths.get_input_directory()`
       - 'output' if the file resides under `folder_paths.get_output_directory()`
@@ -107,7 +114,9 @@ def get_asset_category_and_relative_path(file_path: str) -> tuple[Literal["input
             return False
 
     def _compute_relative(child: str, parent: str) -> str:
-        return os.path.relpath(os.path.join(os.sep, os.path.relpath(child, parent)), os.sep)
+        return os.path.relpath(
+            os.path.join(os.sep, os.path.relpath(child, parent)), os.sep
+        )
 
     # 1) input
     input_base = os.path.abspath(folder_paths.get_input_directory())
@@ -135,7 +144,20 @@ def get_asset_category_and_relative_path(file_path: str) -> tuple[Literal["input
         combined = os.path.join(bucket, rel_inside)
         return "models", os.path.relpath(os.path.join(os.sep, combined), os.sep)
 
-    raise ValueError(f"Path is not within input, output, or configured model bases: {file_path}")
+    raise ValueError(
+        f"Path is not within input, output, or configured model bases: {file_path}"
+    )
+
+
+def compute_filename_for_asset(session, asset_id: str) -> str | None:
+    """Compute the relative filename for an asset from its best live cache state path."""
+    from app.assets.database.queries import list_cache_states_by_asset_id
+    from app.assets.helpers import select_best_live_path
+
+    primary_path = select_best_live_path(
+        list_cache_states_by_asset_id(session, asset_id=asset_id)
+    )
+    return compute_relative_filename(primary_path) if primary_path else None
 
 
 def get_name_and_tags_from_asset_path(file_path: str) -> tuple[str, list[str]]:
@@ -156,5 +178,7 @@ def get_name_and_tags_from_asset_path(file_path: str) -> tuple[str, list[str]]:
     """
     root_category, some_path = get_asset_category_and_relative_path(file_path)
     p = Path(some_path)
-    parent_parts = [part for part in p.parent.parts if part not in (".", "..", p.anchor)]
+    parent_parts = [
+        part for part in p.parent.parts if part not in (".", "..", p.anchor)
+    ]
     return p.name, list(dict.fromkeys(normalize_tags([root_category, *parent_parts])))

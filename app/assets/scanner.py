@@ -44,7 +44,9 @@ def verify_asset_file_unchanged(
 ) -> bool:
     if mtime_db is None:
         return False
-    actual_mtime_ns = getattr(stat_result, "st_mtime_ns", int(stat_result.st_mtime * 1_000_000_000))
+    actual_mtime_ns = getattr(
+        stat_result, "st_mtime_ns", int(stat_result.st_mtime * 1_000_000_000)
+    )
     if int(mtime_db) != int(actual_mtime_ns):
         return False
     sz = int(size_db or 0)
@@ -58,7 +60,9 @@ def list_files_recursively(base_dir: str) -> list[str]:
     base_abs = os.path.abspath(base_dir)
     if not os.path.isdir(base_abs):
         return out
-    for dirpath, _subdirs, filenames in os.walk(base_abs, topdown=True, followlinks=False):
+    for dirpath, _subdirs, filenames in os.walk(
+        base_abs, topdown=True, followlinks=False
+    ):
         for name in filenames:
             out.append(os.path.abspath(os.path.join(dirpath, name)))
     return out
@@ -141,18 +145,22 @@ def _batch_insert_assets_from_paths(
         path_list.append(ap)
         path_to_asset[ap] = aid
 
-        asset_rows.append({
-            "id": aid,
-            "hash": None,
-            "size_bytes": sp["size_bytes"],
-            "mime_type": None,
-            "created_at": now,
-        })
-        state_rows.append({
-            "asset_id": aid,
-            "file_path": ap,
-            "mtime_ns": sp["mtime_ns"],
-        })
+        asset_rows.append(
+            {
+                "id": aid,
+                "hash": None,
+                "size_bytes": sp["size_bytes"],
+                "mime_type": None,
+                "created_at": now,
+            }
+        )
+        state_rows.append(
+            {
+                "asset_id": aid,
+                "file_path": ap,
+                "mtime_ns": sp["mtime_ns"],
+            }
+        )
         asset_to_info[aid] = {
             "id": iid,
             "owner_id": owner_id,
@@ -179,7 +187,11 @@ def _batch_insert_assets_from_paths(
         delete_assets_by_ids(session, lost_assets)
 
     if not winners_by_path:
-        return {"inserted_infos": 0, "won_states": 0, "lost_states": len(losers_by_path)}
+        return {
+            "inserted_infos": 0,
+            "won_states": 0,
+            "lost_states": len(losers_by_path),
+        }
 
     winner_info_rows = [asset_to_info[path_to_asset[p]] for p in winners_by_path]
     db_info_rows = [
@@ -209,22 +221,26 @@ def _batch_insert_assets_from_paths(
             if iid not in inserted_info_ids:
                 continue
             for t in row["_tags"]:
-                tag_rows.append({
-                    "asset_info_id": iid,
-                    "tag_name": t,
-                    "origin": "automatic",
-                    "added_at": now,
-                })
+                tag_rows.append(
+                    {
+                        "asset_info_id": iid,
+                        "tag_name": t,
+                        "origin": "automatic",
+                        "added_at": now,
+                    }
+                )
             if row["_filename"]:
-                meta_rows.append({
-                    "asset_info_id": iid,
-                    "key": "filename",
-                    "ordinal": 0,
-                    "val_str": row["_filename"],
-                    "val_num": None,
-                    "val_bool": None,
-                    "val_json": None,
-                })
+                meta_rows.append(
+                    {
+                        "asset_info_id": iid,
+                        "key": "filename",
+                        "ordinal": 0,
+                        "val_str": row["_filename"],
+                        "val_num": None,
+                        "val_bool": None,
+                        "val_json": None,
+                    }
+                )
 
     bulk_insert_tags_and_meta(session, tag_rows=tag_rows, meta_rows=meta_rows)
 
@@ -299,13 +315,15 @@ def sync_cache_states_with_filesystem(
         except OSError:
             exists = False
 
-        acc["states"].append({
-            "sid": row.state_id,
-            "fp": row.file_path,
-            "exists": exists,
-            "fast_ok": fast_ok,
-            "needs_verify": row.needs_verify,
-        })
+        acc["states"].append(
+            {
+                "sid": row.state_id,
+                "fp": row.file_path,
+                "exists": exists,
+                "fast_ok": fast_ok,
+                "needs_verify": row.needs_verify,
+            }
+        )
 
     to_set_verify: list[int] = []
     to_clear_verify: list[int] = []
@@ -425,14 +443,18 @@ def _build_asset_specs(
         if not stat_p.st_size:
             continue
         name, tags = get_name_and_tags_from_asset_path(abs_p)
-        specs.append({
-            "abs_path": abs_p,
-            "size_bytes": stat_p.st_size,
-            "mtime_ns": getattr(stat_p, "st_mtime_ns", int(stat_p.st_mtime * 1_000_000_000)),
-            "info_name": name,
-            "tags": tags,
-            "fname": compute_relative_filename(abs_p),
-        })
+        specs.append(
+            {
+                "abs_path": abs_p,
+                "size_bytes": stat_p.st_size,
+                "mtime_ns": getattr(
+                    stat_p, "st_mtime_ns", int(stat_p.st_mtime * 1_000_000_000)
+                ),
+                "info_name": name,
+                "tags": tags,
+                "fname": compute_relative_filename(abs_p),
+            }
+        )
         tag_pool.update(tags)
 
     return specs, tag_pool, skipped
@@ -463,9 +485,7 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
     for r in roots:
         existing_paths.update(_sync_root_safely(r))
 
-    all_prefixes = [
-        os.path.abspath(p) for r in roots for p in get_prefixes_for_root(r)
-    ]
+    all_prefixes = [os.path.abspath(p) for r in roots for p in get_prefixes_for_root(r)]
     orphans_pruned = _prune_orphans_safely(all_prefixes)
 
     paths = _collect_paths_for_roots(roots)

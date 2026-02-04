@@ -4,17 +4,7 @@ from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
 from app.assets.database.models import Asset
-
-MAX_BIND_PARAMS = 800
-
-
-def _calculate_rows_per_statement(cols: int) -> int:
-    return max(1, MAX_BIND_PARAMS // max(1, cols))
-
-
-def _iter_chunks(seq, n: int):
-    for i in range(0, len(seq), n):
-        yield seq[i : i + n]
+from app.assets.database.queries.common import calculate_rows_per_statement, iter_chunks
 
 
 def asset_exists_by_hash(
@@ -26,7 +16,10 @@ def asset_exists_by_hash(
     """
     row = (
         session.execute(
-            select(sa.literal(True)).select_from(Asset).where(Asset.hash == asset_hash).limit(1)
+            select(sa.literal(True))
+            .select_from(Asset)
+            .where(Asset.hash == asset_hash)
+            .limit(1)
         )
     ).first()
     return row is not None
@@ -37,8 +30,10 @@ def get_asset_by_hash(
     asset_hash: str,
 ) -> Asset | None:
     return (
-        session.execute(select(Asset).where(Asset.hash == asset_hash).limit(1))
-    ).scalars().first()
+        (session.execute(select(Asset).where(Asset.hash == asset_hash).limit(1)))
+        .scalars()
+        .first()
+    )
 
 
 def upsert_asset(
@@ -60,9 +55,11 @@ def upsert_asset(
     res = session.execute(ins)
     created = int(res.rowcount or 0) > 0
 
-    asset = session.execute(
-        select(Asset).where(Asset.hash == asset_hash).limit(1)
-    ).scalars().first()
+    asset = (
+        session.execute(select(Asset).where(Asset.hash == asset_hash).limit(1))
+        .scalars()
+        .first()
+    )
     if not asset:
         raise RuntimeError("Asset row not found after upsert.")
 
@@ -89,5 +86,5 @@ def bulk_insert_assets(
     if not rows:
         return
     ins = sqlite.insert(Asset)
-    for chunk in _iter_chunks(rows, _calculate_rows_per_statement(5)):
+    for chunk in iter_chunks(rows, calculate_rows_per_statement(5)):
         session.execute(ins, chunk)

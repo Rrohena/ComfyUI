@@ -3,7 +3,6 @@ import mimetypes
 import os
 from typing import Sequence
 
-from sqlalchemy.orm import Session
 
 from app.assets.database.models import Asset
 from app.assets.database.queries import (
@@ -14,7 +13,6 @@ from app.assets.database.queries import (
     fetch_asset_info_asset_and_tags,
     get_asset_by_hash as queries_get_asset_by_hash,
     get_asset_info_by_id,
-    get_asset_tags,
     list_asset_infos_page,
     list_cache_states_by_asset_id,
     set_asset_info_metadata,
@@ -25,7 +23,7 @@ from app.assets.database.queries import (
     update_asset_info_updated_at,
 )
 from app.assets.helpers import select_best_live_path
-from app.assets.services.path_utils import compute_relative_filename
+from app.assets.services.path_utils import compute_filename_for_asset
 from app.assets.services.schemas import (
     AssetData,
     AssetDetailResult,
@@ -80,7 +78,7 @@ def update_asset_metadata(
             update_asset_info_name(session, asset_info_id=asset_info_id, name=name)
             touched = True
 
-        computed_filename = _compute_filename_for_asset(session, info.asset_id)
+        computed_filename = compute_filename_for_asset(session, info.asset_id)
 
         new_meta: dict | None = None
         if user_metadata is not None:
@@ -138,7 +136,9 @@ def delete_asset_reference(
         info_row = get_asset_info_by_id(session, asset_info_id=asset_info_id)
         asset_id = info_row.asset_id if info_row else None
 
-        deleted = delete_asset_info_by_id(session, asset_info_id=asset_info_id, owner_id=owner_id)
+        deleted = delete_asset_info_by_id(
+            session, asset_info_id=asset_info_id, owner_id=owner_id
+        )
         if not deleted:
             session.commit()
             return False
@@ -154,7 +154,9 @@ def delete_asset_reference(
 
         # Orphaned asset - delete it and its files
         states = list_cache_states_by_asset_id(session, asset_id=asset_id)
-        file_paths = [s.file_path for s in (states or []) if getattr(s, "file_path", None)]
+        file_paths = [
+            s.file_path for s in (states or []) if getattr(s, "file_path", None)
+        ]
 
         asset_row = session.get(Asset, asset_id)
         if asset_row is not None:
@@ -204,11 +206,6 @@ def set_asset_preview(
         session.commit()
 
         return detail
-
-
-def _compute_filename_for_asset(session: Session, asset_id: str) -> str | None:
-    primary_path = select_best_live_path(list_cache_states_by_asset_id(session, asset_id=asset_id))
-    return compute_relative_filename(primary_path) if primary_path else None
 
 
 def asset_exists(asset_hash: str) -> bool:
@@ -265,7 +262,9 @@ def resolve_asset_for_download(
     owner_id: str = "",
 ) -> DownloadResolutionResult:
     with create_session() as session:
-        pair = fetch_asset_info_and_asset(session, asset_info_id=asset_info_id, owner_id=owner_id)
+        pair = fetch_asset_info_and_asset(
+            session, asset_info_id=asset_info_id, owner_id=owner_id
+        )
         if not pair:
             raise ValueError(f"AssetInfo {asset_info_id} not found")
 
@@ -278,27 +277,14 @@ def resolve_asset_for_download(
         update_asset_info_access_time(session, asset_info_id=asset_info_id)
         session.commit()
 
-        ctype = asset.mime_type or mimetypes.guess_type(info.name or abs_path)[0] or "application/octet-stream"
+        ctype = (
+            asset.mime_type
+            or mimetypes.guess_type(info.name or abs_path)[0]
+            or "application/octet-stream"
+        )
         download_name = info.name or os.path.basename(abs_path)
         return DownloadResolutionResult(
             abs_path=abs_path,
             content_type=ctype,
             download_name=download_name,
-        )
-
-
-def get_asset_info_with_tags(
-    asset_info_id: str,
-    owner_id: str = "",
-) -> AssetDetailResult | None:
-    with create_session() as session:
-        pair = fetch_asset_info_and_asset(session, asset_info_id=asset_info_id, owner_id=owner_id)
-        if not pair:
-            return None
-        info, asset = pair
-        tags = get_asset_tags(session, asset_info_id=asset_info_id)
-        return AssetDetailResult(
-            info=extract_info_data(info),
-            asset=extract_asset_data(asset),
-            tags=tags,
         )

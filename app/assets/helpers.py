@@ -10,7 +10,11 @@ def select_best_live_path(states: Sequence) -> str:
       2) Otherwise, pick the first path that exists.
       3) Otherwise return empty string.
     """
-    alive = [s for s in states if getattr(s, "file_path", None) and os.path.isfile(s.file_path)]
+    alive = [
+        s
+        for s in states
+        if getattr(s, "file_path", None) and os.path.isfile(s.file_path)
+    ]
     if not alive:
         return ""
     for s in alive:
@@ -19,7 +23,11 @@ def select_best_live_path(states: Sequence) -> str:
     return alive[0].file_path
 
 
-ALLOWED_ROOTS: tuple[Literal["models", "input", "output"], ...] = ("models", "input", "output")
+ALLOWED_ROOTS: tuple[Literal["models", "input", "output"], ...] = (
+    "models",
+    "input",
+    "output",
+)
 
 
 def escape_sql_like_string(s: str, escape: str = "!") -> tuple[str, str]:
@@ -43,4 +51,3 @@ def normalize_tags(tags: list[str] | None) -> list[str]:
       - Removing duplicates.
     """
     return [t.strip().lower() for t in (tags or []) if (t or "").strip()]
-

@@ -7,6 +7,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.assets.database.models import AssetInfo, AssetInfoMeta, AssetInfoTag, Tag
+from app.assets.database.queries.common import (
+    build_visible_owner_clause,
+    iter_row_chunks,
+)
 from app.assets.helpers import escape_sql_like_string, get_utc_now, normalize_tags
 
 
@@ -27,30 +31,10 @@ class SetTagsDict(TypedDict):
     removed: list[str]
     total: list[str]
 
-MAX_BIND_PARAMS = 800
 
-
-def _calculate_rows_per_statement(cols: int) -> int:
-    return max(1, MAX_BIND_PARAMS // max(1, cols))
-
-
-def _iter_row_chunks(rows: list[dict], cols_per_row: int) -> Iterable[list[dict]]:
-    if not rows:
-        return []
-    rows_per_stmt = max(1, MAX_BIND_PARAMS // max(1, cols_per_row))
-    for i in range(0, len(rows), rows_per_stmt):
-        yield rows[i : i + rows_per_stmt]
-
-
-def _build_visible_owner_clause(owner_id: str) -> sa.sql.ClauseElement:
-    """Build owner visibility predicate for reads. Owner-less rows are visible to everyone."""
-    owner_id = (owner_id or "").strip()
-    if owner_id == "":
-        return AssetInfo.owner_id == ""
-    return AssetInfo.owner_id.in_(["", owner_id])
-
-
-def ensure_tags_exist(session: Session, names: Iterable[str], tag_type: str = "user") -> None:
+def ensure_tags_exist(
+    session: Session, names: Iterable[str], tag_type: str = "user"
+) -> None:
     wanted = normalize_tags(list(names))
     if not wanted:
         return
@@ -65,9 +49,12 @@ def ensure_tags_exist(session: Session, names: Iterable[str], tag_type: str = "u
 
 def get_asset_tags(session: Session, asset_info_id: str) -> list[str]:
     return [
-        tag_name for (tag_name,) in (
+        tag_name
+        for (tag_name,) in (
             session.execute(
-                select(AssetInfoTag.tag_name).where(AssetInfoTag.asset_info_id == asset_info_id)
+                select(AssetInfoTag.tag_name).where(
+                    AssetInfoTag.asset_info_id == asset_info_id
+                )
             )
         ).all()
     ]
@@ -82,8 +69,13 @@ def set_asset_info_tags(
     desired = normalize_tags(tags)
 
     current = set(
-        tag_name for (tag_name,) in (
-            session.execute(select(AssetInfoTag.tag_name).where(AssetInfoTag.asset_info_id == asset_info_id))
+        tag_name
+        for (tag_name,) in (
+            session.execute(
+                select(AssetInfoTag.tag_name).where(
+                    AssetInfoTag.asset_info_id == asset_info_id
+                )
+            )
         ).all()
     )
 
@@ -92,16 +84,25 @@ def set_asset_info_tags(
 
     if to_add:
         ensure_tags_exist(session, to_add, tag_type="user")
-        session.add_all([
-            AssetInfoTag(asset_info_id=asset_info_id, tag_name=t, origin=origin, added_at=get_utc_now())
-            for t in to_add
-        ])
+        session.add_all(
+            [
+                AssetInfoTag(
+                    asset_info_id=asset_info_id,
+                    tag_name=t,
+                    origin=origin,
+                    added_at=get_utc_now(),
+                )
+                for t in to_add
+            ]
+        )
         session.flush()
 
     if to_remove:
         session.execute(
-            delete(AssetInfoTag)
-            .where(AssetInfoTag.asset_info_id == asset_info_id, AssetInfoTag.tag_name.in_(to_remove))
+            delete(AssetInfoTag).where(
+                AssetInfoTag.asset_info_id == asset_info_id,
+                AssetInfoTag.tag_name.in_(to_remove),
+            )
         )
         session.flush()
 
@@ -133,7 +134,9 @@ def add_tags_to_asset_info(
         tag_name
         for (tag_name,) in (
             session.execute(
-                sa.select(AssetInfoTag.tag_name).where(AssetInfoTag.asset_info_id == asset_info_id)
+                sa.select(AssetInfoTag.tag_name).where(
+                    AssetInfoTag.asset_info_id == asset_info_id
+                )
             )
         ).all()
     }
@@ -185,7 +188,9 @@ def remove_tags_from_asset_info(
         tag_name
         for (tag_name,) in (
             session.execute(
-                sa.select(AssetInfoTag.tag_name).where(AssetInfoTag.asset_info_id == asset_info_id)
+                sa.select(AssetInfoTag.tag_name).where(
+                    AssetInfoTag.asset_info_id == asset_info_id
+                )
             )
         ).all()
     }
@@ -195,8 +200,7 @@ def remove_tags_from_asset_info(
 
     if to_remove:
         session.execute(
-            delete(AssetInfoTag)
-            .where(
+            delete(AssetInfoTag).where(
                 AssetInfoTag.asset_info_id == asset_info_id,
                 AssetInfoTag.tag_name.in_(to_remove),
             )
@@ -222,7 +226,10 @@ def add_missing_tag_for_asset_id(
         .where(AssetInfo.asset_id == asset_id)
         .where(
             sa.not_(
-                sa.exists().where((AssetInfoTag.asset_info_id == AssetInfo.id) & (AssetInfoTag.tag_name == "missing"))
+                sa.exists().where(
+                    (AssetInfoTag.asset_info_id == AssetInfo.id)
+                    & (AssetInfoTag.tag_name == "missing")
+                )
             )
         )
     )
@@ -232,7 +239,9 @@ def add_missing_tag_for_asset_id(
             ["asset_info_id", "tag_name", "origin", "added_at"],
             select_rows,
         )
-        .on_conflict_do_nothing(index_elements=[AssetInfoTag.asset_info_id, AssetInfoTag.tag_name])
+        .on_conflict_do_nothing(
+            index_elements=[AssetInfoTag.asset_info_id, AssetInfoTag.tag_name]
+        )
     )
 
 
@@ -242,7 +251,9 @@ def remove_missing_tag_for_asset_id(
 ) -> None:
     session.execute(
         sa.delete(AssetInfoTag).where(
-            AssetInfoTag.asset_info_id.in_(sa.select(AssetInfo.id).where(AssetInfo.asset_id == asset_id)),
+            AssetInfoTag.asset_info_id.in_(
+                sa.select(AssetInfo.id).where(AssetInfo.asset_id == asset_id)
+            ),
             AssetInfoTag.tag_name == "missing",
         )
     )
@@ -264,7 +275,7 @@ def list_tags_with_usage(
         )
         .select_from(AssetInfoTag)
         .join(AssetInfo, AssetInfo.id == AssetInfoTag.asset_info_id)
-        .where(_build_visible_owner_clause(owner_id))
+        .where(build_visible_owner_clause(owner_id))
         .group_by(AssetInfoTag.tag_name)
         .subquery()
     )
@@ -323,12 +334,16 @@ def bulk_insert_tags_and_meta(
         ins_tags = sqlite.insert(AssetInfoTag).on_conflict_do_nothing(
             index_elements=[AssetInfoTag.asset_info_id, AssetInfoTag.tag_name]
         )
-        for chunk in _iter_row_chunks(tag_rows, cols_per_row=4):
+        for chunk in iter_row_chunks(tag_rows, cols_per_row=4):
             session.execute(ins_tags, chunk)
 
     if meta_rows:
         ins_meta = sqlite.insert(AssetInfoMeta).on_conflict_do_nothing(
-            index_elements=[AssetInfoMeta.asset_info_id, AssetInfoMeta.key, AssetInfoMeta.ordinal]
+            index_elements=[
+                AssetInfoMeta.asset_info_id,
+                AssetInfoMeta.key,
+                AssetInfoMeta.ordinal,
+            ]
         )
-        for chunk in _iter_row_chunks(meta_rows, cols_per_row=7):
+        for chunk in iter_row_chunks(meta_rows, cols_per_row=7):
             session.execute(ins_meta, chunk)

@@ -16,10 +16,16 @@ from app.assets.database.models import (
     AssetInfoTag,
     Tag,
 )
+from app.assets.database.queries.common import (
+    MAX_BIND_PARAMS,
+    build_visible_owner_clause,
+    calculate_rows_per_statement,
+    iter_chunks,
+)
 from app.assets.helpers import escape_sql_like_string, get_utc_now, normalize_tags
 
 
-def check_is_scalar(v):
+def _check_is_scalar(v):
     if v is None:
         return True
     if isinstance(v, bool):
@@ -33,8 +39,12 @@ def _scalar_to_row(key: str, ordinal: int, value) -> dict:
     """Convert a scalar value to a typed projection row."""
     if value is None:
         return {
-            "key": key, "ordinal": ordinal,
-            "val_str": None, "val_num": None, "val_bool": None, "val_json": None
+            "key": key,
+            "ordinal": ordinal,
+            "val_str": None,
+            "val_num": None,
+            "val_bool": None,
+            "val_json": None,
         }
     if isinstance(value, bool):
         return {"key": key, "ordinal": ordinal, "val_bool": bool(value)}
@@ -55,34 +65,15 @@ def convert_metadata_to_rows(key: str, value) -> list[dict]:
     if value is None:
         return [_scalar_to_row(key, 0, None)]
 
-    if check_is_scalar(value):
+    if _check_is_scalar(value):
         return [_scalar_to_row(key, 0, value)]
 
     if isinstance(value, list):
-        if all(check_is_scalar(x) for x in value):
+        if all(_check_is_scalar(x) for x in value):
             return [_scalar_to_row(key, i, x) for i, x in enumerate(value)]
         return [{"key": key, "ordinal": i, "val_json": x} for i, x in enumerate(value)]
 
     return [{"key": key, "ordinal": 0, "val_json": value}]
-
-MAX_BIND_PARAMS = 800
-
-
-def _calculate_rows_per_statement(cols: int) -> int:
-    return max(1, MAX_BIND_PARAMS // max(1, cols))
-
-
-def _iter_chunks(seq, n: int):
-    for i in range(0, len(seq), n):
-        yield seq[i : i + n]
-
-
-def _build_visible_owner_clause(owner_id: str) -> sa.sql.ClauseElement:
-    """Build owner visibility predicate for reads. Owner-less rows are visible to everyone."""
-    owner_id = (owner_id or "").strip()
-    if owner_id == "":
-        return AssetInfo.owner_id == ""
-    return AssetInfo.owner_id.in_(["", owner_id])
 
 
 def _apply_tag_filters(
@@ -229,15 +220,19 @@ def get_or_create_asset_info(
     if info:
         return info, True
 
-    existing = session.execute(
-        select(AssetInfo)
-        .where(
-            AssetInfo.asset_id == asset_id,
-            AssetInfo.name == name,
-            AssetInfo.owner_id == owner_id,
+    existing = (
+        session.execute(
+            select(AssetInfo)
+            .where(
+                AssetInfo.asset_id == asset_id,
+                AssetInfo.name == name,
+                AssetInfo.owner_id == owner_id,
+            )
+            .limit(1)
         )
-        .limit(1)
-    ).unique().scalar_one_or_none()
+        .unique()
+        .scalar_one_or_none()
+    )
     if not existing:
         raise RuntimeError("Failed to find AssetInfo after insert conflict.")
     return existing, False
@@ -274,7 +269,7 @@ def list_asset_infos_page(
         select(AssetInfo)
         .join(Asset, Asset.id == AssetInfo.asset_id)
         .options(contains_eager(AssetInfo.asset), noload(AssetInfo.tags))
-        .where(_build_visible_owner_clause(owner_id))
+        .where(build_visible_owner_clause(owner_id))
     )
 
     if name_contains:
@@ -302,7 +297,7 @@ def list_asset_infos_page(
         select(sa.func.count())
         .select_from(AssetInfo)
         .join(Asset, Asset.id == AssetInfo.asset_id)
-        .where(_build_visible_owner_clause(owner_id))
+        .where(build_visible_owner_clause(owner_id))
     )
     if name_contains:
         escaped, esc = escape_sql_like_string(name_contains)
@@ -341,7 +336,7 @@ def fetch_asset_info_asset_and_tags(
         .join(Tag, Tag.name == AssetInfoTag.tag_name, isouter=True)
         .where(
             AssetInfo.id == asset_info_id,
-            _build_visible_owner_clause(owner_id),
+            build_visible_owner_clause(owner_id),
         )
         .options(noload(AssetInfo.tags))
         .order_by(Tag.name.asc())
@@ -371,7 +366,7 @@ def fetch_asset_info_and_asset(
         .join(Asset, Asset.id == AssetInfo.asset_id)
         .where(
             AssetInfo.id == asset_info_id,
-            _build_visible_owner_clause(owner_id),
+            build_visible_owner_clause(owner_id),
         )
         .limit(1)
         .options(noload(AssetInfo.tags))
@@ -393,7 +388,9 @@ def update_asset_info_access_time(
     stmt = sa.update(AssetInfo).where(AssetInfo.id == asset_info_id)
     if only_if_newer:
         stmt = stmt.where(
-            sa.or_(AssetInfo.last_access_time.is_(None), AssetInfo.last_access_time < ts)
+            sa.or_(
+                AssetInfo.last_access_time.is_(None), AssetInfo.last_access_time < ts
+            )
         )
     session.execute(stmt.values(last_access_time=ts))
 
@@ -420,9 +417,7 @@ def update_asset_info_updated_at(
     """Update the updated_at timestamp of an AssetInfo."""
     ts = ts or get_utc_now()
     session.execute(
-        sa.update(AssetInfo)
-        .where(AssetInfo.id == asset_info_id)
-        .values(updated_at=ts)
+        sa.update(AssetInfo).where(AssetInfo.id == asset_info_id).values(updated_at=ts)
     )
 
 
@@ -439,7 +434,9 @@ def set_asset_info_metadata(
     info.updated_at = get_utc_now()
     session.flush()
 
-    session.execute(delete(AssetInfoMeta).where(AssetInfoMeta.asset_info_id == asset_info_id))
+    session.execute(
+        delete(AssetInfoMeta).where(AssetInfoMeta.asset_info_id == asset_info_id)
+    )
     session.flush()
 
     if not user_metadata:
@@ -471,7 +468,7 @@ def delete_asset_info_by_id(
 ) -> bool:
     stmt = sa.delete(AssetInfo).where(
         AssetInfo.id == asset_info_id,
-        _build_visible_owner_clause(owner_id),
+        build_visible_owner_clause(owner_id),
     )
     return int((session.execute(stmt)).rowcount or 0) > 0
 
@@ -511,7 +508,7 @@ def bulk_insert_asset_infos_ignore_conflicts(
     ins = sqlite.insert(AssetInfo).on_conflict_do_nothing(
         index_elements=[AssetInfo.asset_id, AssetInfo.owner_id, AssetInfo.name]
     )
-    for chunk in _iter_chunks(rows, _calculate_rows_per_statement(9)):
+    for chunk in iter_chunks(rows, calculate_rows_per_statement(9)):
         session.execute(ins, chunk)
 
 
@@ -524,9 +521,7 @@ def get_asset_info_ids_by_ids(
         return set()
 
     found: set[str] = set()
-    for chunk in _iter_chunks(info_ids, MAX_BIND_PARAMS):
-        result = session.execute(
-            select(AssetInfo.id).where(AssetInfo.id.in_(chunk))
-        )
+    for chunk in iter_chunks(info_ids, MAX_BIND_PARAMS):
+        result = session.execute(select(AssetInfo.id).where(AssetInfo.id.in_(chunk)))
         found.update(result.scalars().all())
     return found

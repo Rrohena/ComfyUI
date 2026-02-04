@@ -27,7 +27,9 @@ from app.database.models import Base, to_dict
 class Asset(Base):
     __tablename__ = "assets"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     mime_type: Mapped[str | None] = mapped_column(String(255))
@@ -75,7 +77,9 @@ class AssetCacheState(Base):
     __tablename__ = "asset_cache_state"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    asset_id: Mapped[str] = mapped_column(String(36), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    )
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     mtime_ns: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     needs_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -85,7 +89,9 @@ class AssetCacheState(Base):
     __table_args__ = (
         Index("ix_asset_cache_state_file_path", "file_path"),
         Index("ix_asset_cache_state_asset_id", "asset_id"),
-        CheckConstraint("(mtime_ns IS NULL) OR (mtime_ns >= 0)", name="ck_acs_mtime_nonneg"),
+        CheckConstraint(
+            "(mtime_ns IS NULL) OR (mtime_ns >= 0)", name="ck_acs_mtime_nonneg"
+        ),
         UniqueConstraint("file_path", name="uq_asset_cache_state_file_path"),
     )
 
@@ -99,15 +105,29 @@ class AssetCacheState(Base):
 class AssetInfo(Base):
     __tablename__ = "assets_info"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     owner_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     name: Mapped[str] = mapped_column(String(512), nullable=False)
-    asset_id: Mapped[str] = mapped_column(String(36), ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
-    preview_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("assets.id", ondelete="SET NULL"))
-    user_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=get_utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=get_utc_now)
-    last_access_time: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=get_utc_now)
+    asset_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False
+    )
+    preview_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("assets.id", ondelete="SET NULL")
+    )
+    user_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True)
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), nullable=False, default=get_utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), nullable=False, default=get_utc_now
+    )
+    last_access_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), nullable=False, default=get_utc_now
+    )
 
     asset: Mapped[Asset] = relationship(
         "Asset",
@@ -143,7 +163,9 @@ class AssetInfo(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("asset_id", "owner_id", "name", name="uq_assets_info_asset_owner_name"),
+        UniqueConstraint(
+            "asset_id", "owner_id", "name", name="uq_assets_info_asset_owner_name"
+        ),
         Index("ix_assets_info_owner_name", "owner_id", "name"),
         Index("ix_assets_info_owner_id", "owner_id"),
         Index("ix_assets_info_asset_id", "asset_id"),
@@ -225,9 +247,7 @@ class Tag(Base):
         overlaps="asset_info_links,tag_links,tags,asset_info",
     )
 
-    __table_args__ = (
-        Index("ix_tags_tag_type", "tag_type"),
-    )
+    __table_args__ = (Index("ix_tags_tag_type", "tag_type"),)
 
     def __repr__(self) -> str:
         return f"<Tag {self.name}>"

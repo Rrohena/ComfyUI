@@ -65,6 +65,7 @@ class ParsedUpload:
     provided_hash: str | None
     provided_hash_exists: bool | None
 
+
 class ListAssetsQuery(BaseModel):
     include_tags: list[str] = Field(default_factory=list)
     exclude_tags: list[str] = Field(default_factory=list)
@@ -76,7 +77,9 @@ class ListAssetsQuery(BaseModel):
     limit: conint(ge=1, le=500) = 20
     offset: conint(ge=0) = 0
 
-    sort: Literal["name", "created_at", "updated_at", "size", "last_access_time"] = "created_at"
+    sort: Literal["name", "created_at", "updated_at", "size", "last_access_time"] = (
+        "created_at"
+    )
     order: Literal["asc", "desc"] = "desc"
 
     @field_validator("include_tags", "exclude_tags", mode="before")
@@ -218,6 +221,7 @@ class UploadAssetSpec(BaseModel):
     Files created via this endpoint are stored on disk using the **content hash** as the filename stem
     and the original extension is preserved when available.
     """
+
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     tags: list[str] = Field(..., min_length=1)
@@ -315,5 +319,7 @@ class UploadAssetSpec(BaseModel):
             raise ValueError("first tag must be one of: models, input, output")
         if root == "models":
             if len(self.tags) < 2:
-                raise ValueError("models uploads require a category tag as the second tag")
+                raise ValueError(
+                    "models uploads require a category tag as the second tag"
+                )
         return self
