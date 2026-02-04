@@ -13,7 +13,7 @@ from typing import Sequence
 
 from app.assets.database.models import Asset
 from app.database.db import create_session
-from app.assets.helpers import select_best_live_path, get_utc_now
+from app.assets.helpers import select_best_live_path
 from app.assets.services.path_utils import compute_relative_filename
 from app.assets.services.schemas import (
     AssetDetailResult,
