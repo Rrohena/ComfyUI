@@ -386,6 +386,9 @@ async def upload_asset(request: web.Request) -> web.Response:
     except AssetValidationError as e:
         _delete_temp_file_if_exists(parsed.tmp_path)
         return _build_error_response(400, e.code, str(e))
+    except ValueError as e:
+        _delete_temp_file_if_exists(parsed.tmp_path)
+        return _build_error_response(400, "BAD_REQUEST", str(e))
     except HashMismatchError as e:
         _delete_temp_file_if_exists(parsed.tmp_path)
         return _build_error_response(400, "HASH_MISMATCH", str(e))
