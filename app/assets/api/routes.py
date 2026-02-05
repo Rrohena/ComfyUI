@@ -695,3 +695,23 @@ async def cancel_seed(request: web.Request) -> web.Response:
     if cancelled:
         return web.json_response({"status": "cancelling"}, status=200)
     return web.json_response({"status": "idle"}, status=200)
+
+
+@ROUTES.post("/api/assets/prune")
+async def prune_orphans(request: web.Request) -> web.Response:
+    """Prune orphaned assets that no longer exist on the filesystem.
+
+    This removes assets whose cache states point to files outside all known
+    root prefixes (models, input, output).
+
+    Returns:
+        200 OK with count of pruned assets
+        409 Conflict if a scan is currently running
+    """
+    pruned = asset_seeder.prune_orphans()
+    if pruned == 0 and asset_seeder.get_status().state.value != "IDLE":
+        return web.json_response(
+            {"status": "scan_running", "pruned": 0},
+            status=409,
+        )
+    return web.json_response({"status": "completed", "pruned": pruned}, status=200)

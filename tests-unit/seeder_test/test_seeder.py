@@ -25,7 +25,6 @@ def mock_dependencies():
     with (
         patch("app.assets.seeder.dependencies_available", return_value=True),
         patch("app.assets.seeder._sync_root_safely", return_value=set()),
-        patch("app.assets.seeder._prune_orphans_safely", return_value=0),
         patch("app.assets.seeder._collect_paths_for_roots", return_value=[]),
         patch("app.assets.seeder._build_asset_specs", return_value=([], set(), 0)),
         patch("app.assets.seeder._insert_asset_specs", return_value=0),
@@ -210,7 +209,6 @@ class TestSeederCancellation:
         with (
             patch("app.assets.seeder.dependencies_available", return_value=True),
             patch("app.assets.seeder._sync_root_safely", return_value=set()),
-            patch("app.assets.seeder._prune_orphans_safely", return_value=0),
             patch("app.assets.seeder._collect_paths_for_roots", return_value=paths),
             patch("app.assets.seeder._build_asset_specs", return_value=(specs, set(), 0)),
             patch("app.assets.seeder._insert_asset_specs", side_effect=slow_insert),
@@ -232,7 +230,6 @@ class TestSeederErrorHandling:
         with (
             patch("app.assets.seeder.dependencies_available", return_value=True),
             patch("app.assets.seeder._sync_root_safely", return_value=set()),
-            patch("app.assets.seeder._prune_orphans_safely", return_value=0),
             patch(
                 "app.assets.seeder._collect_paths_for_roots",
                 return_value=["/path/file.safetensors"],
@@ -345,3 +342,72 @@ class TestSeederThreadSafety:
             barrier.set()
 
             assert all(s.state in (State.RUNNING, State.IDLE, State.CANCELLING) for s in statuses)
+
+
+class TestSeederPruneOrphans:
+    """Test prune_orphans behavior."""
+
+    def test_prune_orphans_when_idle(self, fresh_seeder: AssetSeeder):
+        with (
+            patch("app.assets.seeder.dependencies_available", return_value=True),
+            patch("app.assets.seeder.get_all_known_prefixes", return_value=["/models", "/input", "/output"]),
+            patch("app.assets.seeder._prune_orphans_safely", return_value=5) as mock_prune,
+        ):
+            result = fresh_seeder.prune_orphans()
+            assert result == 5
+            mock_prune.assert_called_once_with(["/models", "/input", "/output"])
+
+    def test_prune_orphans_returns_zero_when_running(
+        self, fresh_seeder: AssetSeeder, mock_dependencies
+    ):
+        barrier = threading.Event()
+
+        def slow_collect(*args):
+            barrier.wait(timeout=5.0)
+            return []
+
+        with patch(
+            "app.assets.seeder._collect_paths_for_roots", side_effect=slow_collect
+        ):
+            fresh_seeder.start(roots=("models",))
+            time.sleep(0.05)
+
+            result = fresh_seeder.prune_orphans()
+            assert result == 0
+
+            barrier.set()
+
+    def test_prune_orphans_returns_zero_when_dependencies_unavailable(
+        self, fresh_seeder: AssetSeeder
+    ):
+        with patch("app.assets.seeder.dependencies_available", return_value=False):
+            result = fresh_seeder.prune_orphans()
+            assert result == 0
+
+    def test_prune_first_flag_triggers_pruning_before_scan(
+        self, fresh_seeder: AssetSeeder
+    ):
+        prune_call_order = []
+
+        def track_prune(prefixes):
+            prune_call_order.append("prune")
+            return 3
+
+        def track_sync(root):
+            prune_call_order.append(f"sync_{root}")
+            return set()
+
+        with (
+            patch("app.assets.seeder.dependencies_available", return_value=True),
+            patch("app.assets.seeder.get_all_known_prefixes", return_value=["/models"]),
+            patch("app.assets.seeder._prune_orphans_safely", side_effect=track_prune),
+            patch("app.assets.seeder._sync_root_safely", side_effect=track_sync),
+            patch("app.assets.seeder._collect_paths_for_roots", return_value=[]),
+            patch("app.assets.seeder._build_asset_specs", return_value=([], set(), 0)),
+            patch("app.assets.seeder._insert_asset_specs", return_value=0),
+        ):
+            fresh_seeder.start(roots=("models",), prune_first=True)
+            fresh_seeder.wait(timeout=5.0)
+
+            assert prune_call_order[0] == "prune"
+            assert "sync_models" in prune_call_order

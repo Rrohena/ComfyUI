@@ -15,6 +15,7 @@ from app.assets.scanner import (
     _insert_asset_specs,
     _prune_orphans_safely,
     _sync_root_safely,
+    get_all_known_prefixes,
     get_prefixes_for_root,
 )
 from app.database.db import dependencies_available
@@ -85,14 +86,16 @@ class AssetSeeder:
 
     def start(
         self,
-        roots: tuple[RootType, ...] = ("models",),
+        roots: tuple[RootType, ...] = ("models", "input", "output"),
         progress_callback: ProgressCallback | None = None,
+        prune_first: bool = False,
     ) -> bool:
         """Start a background scan for the given roots.
 
         Args:
             roots: Tuple of root types to scan (models, input, output)
             progress_callback: Optional callback called with progress updates
+            prune_first: If True, prune orphaned assets before scanning
 
         Returns:
             True if scan was started, False if already running
@@ -104,6 +107,7 @@ class AssetSeeder:
             self._progress = Progress()
             self._errors = []
             self._roots = roots
+            self._prune_first = prune_first
             self._progress_callback = progress_callback
             self._cancel_event.clear()
             self._thread = threading.Thread(
@@ -169,6 +173,34 @@ class AssetSeeder:
         self.wait(timeout=timeout)
         with self._lock:
             self._thread = None
+
+    def prune_orphans(self) -> int:
+        """Prune orphaned assets that are outside all known root prefixes.
+
+        This operation is decoupled from scanning to prevent partial scans
+        from accidentally deleting assets belonging to other roots.
+
+        Should be called explicitly when cleanup is desired, typically after
+        a full scan of all roots or during maintenance.
+
+        Returns:
+            Number of orphaned assets pruned, or 0 if dependencies unavailable
+            or a scan is currently running
+        """
+        with self._lock:
+            if self._state != State.IDLE:
+                logging.warning("Cannot prune orphans while scan is running")
+                return 0
+
+        if not dependencies_available():
+            logging.warning("Database dependencies not available, skipping orphan pruning")
+            return 0
+
+        all_prefixes = get_all_known_prefixes()
+        pruned = _prune_orphans_safely(all_prefixes)
+        if pruned > 0:
+            logging.info("Pruned %d orphaned assets", pruned)
+        return pruned
 
     def _is_cancelled(self) -> bool:
         """Check if cancellation has been requested."""
@@ -254,6 +286,17 @@ class AssetSeeder:
                 )
                 return
 
+            if self._prune_first:
+                all_prefixes = get_all_known_prefixes()
+                pruned = _prune_orphans_safely(all_prefixes)
+                if pruned > 0:
+                    logging.info("Pruned %d orphaned assets before scan", pruned)
+
+            if self._is_cancelled():
+                logging.info("Asset scan cancelled after pruning phase")
+                cancelled = True
+                return
+
             self._log_scan_config(roots)
 
             existing_paths: set[str] = set()
@@ -266,16 +309,6 @@ class AssetSeeder:
 
             if self._is_cancelled():
                 logging.info("Asset scan cancelled after sync phase")
-                cancelled = True
-                return
-
-            all_prefixes = [
-                os.path.abspath(p) for r in roots for p in get_prefixes_for_root(r)
-            ]
-            orphans_pruned = _prune_orphans_safely(all_prefixes)
-
-            if self._is_cancelled():
-                logging.info("Asset scan cancelled after orphan pruning")
                 cancelled = True
                 return
 
@@ -335,12 +368,11 @@ class AssetSeeder:
 
             elapsed = time.perf_counter() - t_start
             logging.info(
-                "Asset scan(roots=%s) completed in %.3fs (created=%d, skipped=%d, orphans_pruned=%d, total=%d)",
+                "Asset scan(roots=%s) completed in %.3fs (created=%d, skipped=%d, total=%d)",
                 roots,
                 elapsed,
                 total_created,
                 skipped_existing,
-                orphans_pruned,
                 len(paths),
             )
 

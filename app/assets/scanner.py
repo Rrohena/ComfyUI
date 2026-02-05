@@ -61,6 +61,14 @@ def get_prefixes_for_root(root: RootType) -> list[str]:
     return []
 
 
+def get_all_known_prefixes() -> list[str]:
+    """Get all known asset prefixes across all root types."""
+    all_roots: tuple[RootType, ...] = ("models", "input", "output")
+    return [
+        os.path.abspath(p) for root in all_roots for p in get_prefixes_for_root(root)
+    ]
+
+
 def collect_models_files() -> list[str]:
     out: list[str] = []
     for folder_name, bases in get_comfy_models_folders():
@@ -287,7 +295,11 @@ def _insert_asset_specs(specs: list[SeedAssetSpec], tag_pool: set[str]) -> int:
 
 
 def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> None:
-    """Scan the given roots and seed the assets into the database."""
+    """Scan the given roots and seed the assets into the database.
+
+    Note: This function does not prune orphaned assets. Call prune_orphaned_assets
+    separately if cleanup is needed.
+    """
     if not dependencies_available():
         if enable_logging:
             logging.warning("Database dependencies not available, skipping assets scan")
@@ -299,20 +311,16 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
     for r in roots:
         existing_paths.update(_sync_root_safely(r))
 
-    all_prefixes = [os.path.abspath(p) for r in roots for p in get_prefixes_for_root(r)]
-    orphans_pruned = _prune_orphans_safely(all_prefixes)
-
     paths = _collect_paths_for_roots(roots)
     specs, tag_pool, skipped_existing = _build_asset_specs(paths, existing_paths)
     created = _insert_asset_specs(specs, tag_pool)
 
     if enable_logging:
         logging.info(
-            "Assets scan(roots=%s) completed in %.3fs (created=%d, skipped_existing=%d, orphans_pruned=%d, total_seen=%d)",
+            "Assets scan(roots=%s) completed in %.3fs (created=%d, skipped_existing=%d, total_seen=%d)",
             roots,
             time.perf_counter() - t_start,
             created,
             skipped_existing,
-            orphans_pruned,
             len(paths),
         )
