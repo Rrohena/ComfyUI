@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 import os
 import uuid
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from app.assets.services.metadata_extract import ExtractedMetadata
 
 
 class SeedAssetSpec(TypedDict):
@@ -15,6 +20,7 @@ class SeedAssetSpec(TypedDict):
     info_name: str
     tags: list[str]
     fname: str
+    metadata: ExtractedMetadata | None
 
 from app.assets.database.queries import (
     bulk_insert_asset_infos_ignore_conflicts,
@@ -98,18 +104,28 @@ def batch_insert_seed_assets(
                 "mtime_ns": sp["mtime_ns"],
             }
         )
+        # Build user_metadata from extracted metadata or fallback to filename
+        extracted = sp.get("metadata")
+        if extracted:
+            user_metadata: dict[str, Any] | None = extracted.to_user_metadata()
+        elif sp["fname"]:
+            user_metadata = {"filename": sp["fname"]}
+        else:
+            user_metadata = None
+
         asset_to_info[aid] = {
             "id": iid,
             "owner_id": owner_id,
             "name": sp["info_name"],
             "asset_id": aid,
             "preview_id": None,
-            "user_metadata": {"filename": sp["fname"]} if sp["fname"] else None,
+            "user_metadata": user_metadata,
             "created_at": now,
             "updated_at": now,
             "last_access_time": now,
             "_tags": sp["tags"],
             "_filename": sp["fname"],
+            "_extracted_metadata": extracted,
         }
 
     bulk_insert_assets(session, asset_rows)
@@ -166,7 +182,13 @@ def batch_insert_seed_assets(
                         "added_at": now,
                     }
                 )
-            if row["_filename"]:
+
+            # Use extracted metadata for meta rows if available
+            extracted = row.get("_extracted_metadata")
+            if extracted:
+                meta_rows.extend(extracted.to_meta_rows(iid))
+            elif row["_filename"]:
+                # Fallback: just store filename
                 meta_rows.append(
                     {
                         "asset_info_id": iid,

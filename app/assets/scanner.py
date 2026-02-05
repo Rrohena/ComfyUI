@@ -24,6 +24,7 @@ from app.assets.services.file_utils import (
     list_files_recursively,
     verify_file_unchanged,
 )
+from app.assets.services.metadata_extract import extract_file_metadata
 from app.assets.services.path_utils import (
     compute_relative_filename,
     get_comfy_models_folders,
@@ -249,8 +250,15 @@ def _collect_paths_for_roots(roots: tuple[RootType, ...]) -> list[str]:
 def _build_asset_specs(
     paths: list[str],
     existing_paths: set[str],
+    enable_metadata_extraction: bool = True,
 ) -> tuple[list[SeedAssetSpec], set[str], int]:
-    """Build asset specs from paths, returning (specs, tag_pool, skipped_count)."""
+    """Build asset specs from paths, returning (specs, tag_pool, skipped_count).
+
+    Args:
+        paths: List of file paths to process
+        existing_paths: Set of paths that already exist in the database
+        enable_metadata_extraction: If True, extract tier 1 & 2 metadata from files
+    """
     specs: list[SeedAssetSpec] = []
     tag_pool: set[str] = set()
     skipped = 0
@@ -267,6 +275,18 @@ def _build_asset_specs(
         if not stat_p.st_size:
             continue
         name, tags = get_name_and_tags_from_asset_path(abs_p)
+        rel_fname = compute_relative_filename(abs_p)
+
+        # Extract metadata (tier 1: filesystem, tier 2: safetensors header)
+        metadata = None
+        if enable_metadata_extraction:
+            metadata = extract_file_metadata(
+                abs_p,
+                stat_result=stat_p,
+                enable_safetensors=True,
+                relative_filename=rel_fname,
+            )
+
         specs.append(
             {
                 "abs_path": abs_p,
@@ -274,7 +294,8 @@ def _build_asset_specs(
                 "mtime_ns": get_mtime_ns(stat_p),
                 "info_name": name,
                 "tags": tags,
-                "fname": compute_relative_filename(abs_p),
+                "fname": rel_fname,
+                "metadata": metadata,
             }
         )
         tag_pool.update(tags)

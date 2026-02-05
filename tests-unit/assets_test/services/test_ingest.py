@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.assets.database.models import Asset, AssetCacheState, AssetInfo, Tag
 from app.assets.database.queries import get_asset_tags
-from app.assets.services import ingest_file_from_path, register_existing_asset
+from app.assets.services.ingest import _ingest_file_from_path, _register_existing_asset
 
 
 class TestIngestFileFromPath:
@@ -14,7 +14,7 @@ class TestIngestFileFromPath:
         file_path = temp_dir / "test_file.bin"
         file_path.write_bytes(b"test content")
 
-        result = ingest_file_from_path(
+        result = _ingest_file_from_path(
             abs_path=str(file_path),
             asset_hash="blake3:abc123",
             size_bytes=12,
@@ -39,7 +39,7 @@ class TestIngestFileFromPath:
         file_path = temp_dir / "model.safetensors"
         file_path.write_bytes(b"model data")
 
-        result = ingest_file_from_path(
+        result = _ingest_file_from_path(
             abs_path=str(file_path),
             asset_hash="blake3:def456",
             size_bytes=10,
@@ -61,7 +61,7 @@ class TestIngestFileFromPath:
         file_path = temp_dir / "tagged.bin"
         file_path.write_bytes(b"data")
 
-        result = ingest_file_from_path(
+        result = _ingest_file_from_path(
             abs_path=str(file_path),
             asset_hash="blake3:ghi789",
             size_bytes=4,
@@ -86,7 +86,7 @@ class TestIngestFileFromPath:
         file_path.write_bytes(b"content")
 
         # First ingest
-        r1 = ingest_file_from_path(
+        r1 = _ingest_file_from_path(
             abs_path=str(file_path),
             asset_hash="blake3:repeat",
             size_bytes=7,
@@ -95,7 +95,7 @@ class TestIngestFileFromPath:
         assert r1.asset_created is True
 
         # Second ingest with same hash - should update, not create
-        r2 = ingest_file_from_path(
+        r2 = _ingest_file_from_path(
             abs_path=str(file_path),
             asset_hash="blake3:repeat",
             size_bytes=7,
@@ -118,7 +118,7 @@ class TestIngestFileFromPath:
         session.commit()
         preview_id = preview_asset.id
 
-        result = ingest_file_from_path(
+        result = _ingest_file_from_path(
             abs_path=str(file_path),
             asset_hash="blake3:main",
             size_bytes=4,
@@ -135,7 +135,7 @@ class TestIngestFileFromPath:
         file_path = temp_dir / "bad_preview.bin"
         file_path.write_bytes(b"data")
 
-        result = ingest_file_from_path(
+        result = _ingest_file_from_path(
             abs_path=str(file_path),
             asset_hash="blake3:badpreview",
             size_bytes=4,
@@ -156,7 +156,7 @@ class TestRegisterExistingAsset:
         session.add(asset)
         session.commit()
 
-        result = register_existing_asset(
+        result = _register_existing_asset(
             asset_hash="blake3:existing",
             name="Registered Asset",
             user_metadata={"key": "value"},
@@ -191,7 +191,7 @@ class TestRegisterExistingAsset:
         info_id = info.id
         session.commit()
 
-        result = register_existing_asset(
+        result = _register_existing_asset(
             asset_hash="blake3:withinfo",
             name="Existing Info",
             owner_id="",
@@ -207,7 +207,7 @@ class TestRegisterExistingAsset:
 
     def test_raises_for_nonexistent_hash(self, mock_create_session):
         with pytest.raises(ValueError, match="No asset with hash"):
-            register_existing_asset(
+            _register_existing_asset(
                 asset_hash="blake3:doesnotexist",
                 name="Fail",
             )
@@ -217,7 +217,7 @@ class TestRegisterExistingAsset:
         session.add(asset)
         session.commit()
 
-        result = register_existing_asset(
+        result = _register_existing_asset(
             asset_hash="blake3:tagged",
             name="Tagged Info",
             tags=["alpha", "beta"],

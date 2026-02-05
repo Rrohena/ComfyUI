@@ -40,7 +40,7 @@ from app.assets.services.schemas import (
 from app.database.db import create_session
 
 
-def ingest_file_from_path(
+def _ingest_file_from_path(
     abs_path: str,
     asset_hash: str,
     size_bytes: int,
@@ -134,7 +134,7 @@ def ingest_file_from_path(
     )
 
 
-def register_existing_asset(
+def _register_existing_asset(
     asset_hash: str,
     name: str,
     user_metadata: UserMetadata = None,
@@ -278,7 +278,7 @@ def upload_from_temp_path(
                 os.remove(temp_path)
 
         display_name = _sanitize_filename(name or client_filename, fallback=digest)
-        result = register_existing_asset(
+        result = _register_existing_asset(
             asset_hash=asset_hash,
             name=display_name,
             user_metadata=user_metadata or {},
@@ -320,7 +320,7 @@ def upload_from_temp_path(
     except OSError as e:
         raise RuntimeError(f"failed to stat destination file: {e}")
 
-    ingest_result = ingest_file_from_path(
+    ingest_result = _ingest_file_from_path(
         asset_hash=asset_hash,
         abs_path=dest_abs,
         size_bytes=size_bytes,
@@ -369,7 +369,7 @@ def create_from_hash(
         if not asset:
             return None
 
-    result = register_existing_asset(
+    result = _register_existing_asset(
         asset_hash=canonical,
         name=_sanitize_filename(
             name, fallback=canonical.split(":", 1)[1] if ":" in canonical else canonical

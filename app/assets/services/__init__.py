@@ -23,8 +23,6 @@ from app.assets.services.ingest import (
     DependencyMissingError,
     HashMismatchError,
     create_from_hash,
-    ingest_file_from_path,
-    register_existing_asset,
     upload_from_temp_path,
 )
 from app.assets.services.schemas import (
@@ -76,12 +74,10 @@ __all__ = [
     "get_asset_detail",
     "get_mtime_ns",
     "get_size_and_mtime_ns",
-    "ingest_file_from_path",
     "list_assets_page",
     "list_files_recursively",
     "list_tags",
     "prune_orphaned_assets",
-    "register_existing_asset",
     "remove_tags",
     "resolve_asset_for_download",
     "set_asset_preview",
