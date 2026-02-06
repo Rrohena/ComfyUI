@@ -18,7 +18,7 @@ def compute_blake3_hash(
         return _hash_file_obj(f, chunk_size)
 
 
-async def compute_compute_blake3_hash_async(
+async def compute_blake3_hash_async(
     fp: str | IO[bytes],
     chunk_size: int = DEFAULT_CHUNK,
 ) -> str:

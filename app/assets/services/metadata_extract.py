@@ -17,6 +17,9 @@ from typing import Any
 # Supported safetensors extensions
 SAFETENSORS_EXTENSIONS = frozenset({".safetensors", ".sft"})
 
+# Maximum safetensors header size to read (8MB)
+MAX_SAFETENSORS_HEADER_SIZE = 8 * 1024 * 1024
+
 
 @dataclass
 class ExtractedMetadata:
@@ -163,7 +166,7 @@ class ExtractedMetadata:
         return rows
 
 
-def _read_safetensors_header(path: str, max_size: int = 8 * 1024 * 1024) -> dict[str, Any] | None:
+def _read_safetensors_header(path: str, max_size: int = MAX_SAFETENSORS_HEADER_SIZE) -> dict[str, Any] | None:
     """Read only the JSON header from a safetensors file.
 
     This is very fast - reads 8 bytes for header length, then the JSON header.
