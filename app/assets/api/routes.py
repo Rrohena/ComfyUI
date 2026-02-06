@@ -14,7 +14,10 @@ from app.assets.api.schemas_in import (
     AssetValidationError,
     UploadError,
 )
-from app.assets.api.upload import parse_multipart_upload
+from app.assets.api.upload import (
+    delete_temp_file_if_exists,
+    parse_multipart_upload,
+)
 from app.assets.seeder import asset_seeder
 from app.assets.services import (
     DependencyMissingError,
@@ -305,14 +308,6 @@ async def create_asset_from_hash_route(request: web.Request) -> web.Response:
     return web.json_response(payload_out.model_dump(mode="json"), status=201)
 
 
-def _delete_temp_file_if_exists(path: str | None) -> None:
-    if path and os.path.exists(path):
-        try:
-            os.remove(path)
-        except Exception:
-            pass
-
-
 @ROUTES.post("/api/assets")
 async def upload_asset(request: web.Request) -> web.Response:
     """Multipart/form-data endpoint for Asset uploads."""
@@ -333,7 +328,7 @@ async def upload_asset(request: web.Request) -> web.Response:
             }
         )
     except ValidationError as ve:
-        _delete_temp_file_if_exists(parsed.tmp_path)
+        delete_temp_file_if_exists(parsed.tmp_path)
         return _build_error_response(
             400, "INVALID_BODY", f"Validation failed: {ve.json()}"
         )
@@ -343,7 +338,7 @@ async def upload_asset(request: web.Request) -> web.Response:
             len(spec.tags) < 2
             or spec.tags[1] not in folder_paths.folder_names_and_paths
         ):
-            _delete_temp_file_if_exists(parsed.tmp_path)
+            delete_temp_file_if_exists(parsed.tmp_path)
             category = spec.tags[1] if len(spec.tags) >= 2 else ""
             return _build_error_response(
                 400, "INVALID_BODY", f"unknown models category '{category}'"
@@ -360,11 +355,11 @@ async def upload_asset(request: web.Request) -> web.Response:
                 owner_id=owner_id,
             )
             if result is None:
-                _delete_temp_file_if_exists(parsed.tmp_path)
+                delete_temp_file_if_exists(parsed.tmp_path)
                 return _build_error_response(
                     404, "ASSET_NOT_FOUND", f"Asset content {spec.hash} does not exist"
                 )
-            _delete_temp_file_if_exists(parsed.tmp_path)
+            delete_temp_file_if_exists(parsed.tmp_path)
         else:
             # Otherwise, we must have a temp file path to ingest
             if not parsed.tmp_path or not os.path.exists(parsed.tmp_path):
@@ -384,19 +379,19 @@ async def upload_asset(request: web.Request) -> web.Response:
                 expected_hash=spec.hash,
             )
     except AssetValidationError as e:
-        _delete_temp_file_if_exists(parsed.tmp_path)
+        delete_temp_file_if_exists(parsed.tmp_path)
         return _build_error_response(400, e.code, str(e))
     except ValueError as e:
-        _delete_temp_file_if_exists(parsed.tmp_path)
+        delete_temp_file_if_exists(parsed.tmp_path)
         return _build_error_response(400, "BAD_REQUEST", str(e))
     except HashMismatchError as e:
-        _delete_temp_file_if_exists(parsed.tmp_path)
+        delete_temp_file_if_exists(parsed.tmp_path)
         return _build_error_response(400, "HASH_MISMATCH", str(e))
     except DependencyMissingError as e:
-        _delete_temp_file_if_exists(parsed.tmp_path)
+        delete_temp_file_if_exists(parsed.tmp_path)
         return _build_error_response(503, "DEPENDENCY_MISSING", e.message)
     except Exception:
-        _delete_temp_file_if_exists(parsed.tmp_path)
+        delete_temp_file_if_exists(parsed.tmp_path)
         logging.exception("upload_asset failed for owner_id=%s", owner_id)
         return _build_error_response(500, "INTERNAL", "Unexpected server error.")
 

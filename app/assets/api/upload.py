@@ -117,7 +117,7 @@ async def parse_multipart_upload(
                         f.write(chunk)
                         file_written += len(chunk)
             except Exception:
-                _delete_temp_file_if_exists(tmp_path)
+                delete_temp_file_if_exists(tmp_path)
                 raise UploadError(
                     500, "UPLOAD_IO_ERROR", "Failed to receive and store uploaded file."
                 )
@@ -139,7 +139,7 @@ async def parse_multipart_upload(
         and file_written == 0
         and not (provided_hash and provided_hash_exists)
     ):
-        _delete_temp_file_if_exists(tmp_path)
+        delete_temp_file_if_exists(tmp_path)
         raise UploadError(400, "EMPTY_UPLOAD", "Uploaded file is empty.")
 
     return ParsedUpload(
@@ -155,7 +155,7 @@ async def parse_multipart_upload(
     )
 
 
-def _delete_temp_file_if_exists(tmp_path: str | None) -> None:
+def delete_temp_file_if_exists(tmp_path: str | None) -> None:
     """Safely remove a temp file if it exists."""
     if tmp_path:
         try:
