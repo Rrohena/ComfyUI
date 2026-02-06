@@ -25,7 +25,7 @@ from app.assets.database.queries.asset_info import (
 from app.assets.database.queries.cache_state import (
     CacheStateRow,
     bulk_insert_cache_states_ignore_conflicts,
-    bulk_set_needs_verify,
+    bulk_update_needs_verify,
     delete_assets_by_ids,
     delete_cache_states_by_ids,
     delete_orphaned_seed_asset,
@@ -65,7 +65,7 @@ __all__ = [
     "bulk_insert_assets",
     "bulk_insert_cache_states_ignore_conflicts",
     "bulk_insert_tags_and_meta",
-    "bulk_set_needs_verify",
+    "bulk_update_needs_verify",
     "delete_asset_info_by_id",
     "delete_assets_by_ids",
     "delete_cache_states_by_ids",

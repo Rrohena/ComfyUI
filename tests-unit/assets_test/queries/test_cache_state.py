@@ -9,7 +9,7 @@ from app.assets.database.queries import (
     get_unreferenced_unhashed_asset_ids,
     delete_assets_by_ids,
     get_cache_states_for_prefixes,
-    bulk_set_needs_verify,
+    bulk_update_needs_verify,
     delete_cache_states_by_ids,
     delete_orphaned_seed_asset,
     bulk_insert_cache_states_ignore_conflicts,
@@ -336,7 +336,7 @@ class TestBulkSetNeedsVerify:
         state2 = _make_cache_state(session, asset, "/path2.bin", needs_verify=False)
         session.commit()
 
-        updated = bulk_set_needs_verify(session, [state1.id, state2.id], True)
+        updated = bulk_update_needs_verify(session, [state1.id, state2.id], True)
         session.commit()
 
         assert updated == 2
@@ -346,7 +346,7 @@ class TestBulkSetNeedsVerify:
         assert state2.needs_verify is True
 
     def test_empty_list_updates_nothing(self, session: Session):
-        updated = bulk_set_needs_verify(session, [], True)
+        updated = bulk_update_needs_verify(session, [], True)
         assert updated == 0
 
 

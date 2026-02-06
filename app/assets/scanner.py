@@ -7,7 +7,7 @@ from typing import Literal, TypedDict
 import folder_paths
 from app.assets.database.queries import (
     add_missing_tag_for_asset_id,
-    bulk_set_needs_verify,
+    bulk_update_needs_verify,
     delete_cache_states_by_ids,
     delete_orphaned_seed_asset,
     ensure_tags_exist,
@@ -195,8 +195,8 @@ def sync_cache_states_with_filesystem(
                 survivors.add(os.path.abspath(s["fp"]))
 
     delete_cache_states_by_ids(session, stale_state_ids)
-    bulk_set_needs_verify(session, to_set_verify, value=True)
-    bulk_set_needs_verify(session, to_clear_verify, value=False)
+    bulk_update_needs_verify(session, to_set_verify, value=True)
+    bulk_update_needs_verify(session, to_clear_verify, value=False)
 
     return survivors if collect_existing_paths else None
 

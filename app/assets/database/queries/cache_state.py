@@ -246,7 +246,7 @@ def get_cache_states_for_prefixes(
     ]
 
 
-def bulk_set_needs_verify(session: Session, state_ids: list[int], value: bool) -> int:
+def bulk_update_needs_verify(session: Session, state_ids: list[int], value: bool) -> int:
     """Set needs_verify flag for multiple cache states.
 
     Returns: Number of rows updated
