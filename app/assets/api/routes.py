@@ -146,9 +146,7 @@ async def list_assets_route(request: web.Request) -> web.Response:
             id=item.info.id,
             name=item.info.name,
             asset_hash=item.asset.hash if item.asset else None,
-            size=int(item.asset.size_bytes)
-            if item.asset and item.asset.size_bytes
-            else None,
+            size=int(item.asset.size_bytes) if item.asset else None,
             mime_type=item.asset.mime_type if item.asset else None,
             tags=item.tags,
             created_at=item.info.created_at,
@@ -189,9 +187,7 @@ async def get_asset_route(request: web.Request) -> web.Response:
             id=result.info.id,
             name=result.info.name,
             asset_hash=result.asset.hash if result.asset else None,
-            size=int(result.asset.size_bytes)
-            if result.asset and result.asset.size_bytes is not None
-            else None,
+            size=int(result.asset.size_bytes) if result.asset else None,
             mime_type=result.asset.mime_type if result.asset else None,
             tags=result.tags,
             user_metadata=result.info.user_metadata or {},
@@ -296,7 +292,7 @@ async def create_asset_from_hash_route(request: web.Request) -> web.Response:
         id=result.info.id,
         name=result.info.name,
         asset_hash=result.asset.hash,
-        size=int(result.asset.size_bytes) if result.asset.size_bytes else None,
+        size=int(result.asset.size_bytes),
         mime_type=result.asset.mime_type,
         tags=result.tags,
         user_metadata=result.info.user_metadata or {},
@@ -399,7 +395,7 @@ async def upload_asset(request: web.Request) -> web.Response:
         id=result.info.id,
         name=result.info.name,
         asset_hash=result.asset.hash,
-        size=int(result.asset.size_bytes) if result.asset.size_bytes else None,
+        size=int(result.asset.size_bytes),
         mime_type=result.asset.mime_type,
         tags=result.tags,
         user_metadata=result.info.user_metadata or {},
