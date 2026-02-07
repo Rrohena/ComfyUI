@@ -36,15 +36,23 @@ def verify_file_unchanged(
     return True
 
 
+def is_visible(name: str) -> bool:
+    """Return True if a file or directory name is visible (not hidden)."""
+    return not name.startswith(".")
+
+
 def list_files_recursively(base_dir: str) -> list[str]:
     """Recursively list all files in a directory."""
     out: list[str] = []
     base_abs = os.path.abspath(base_dir)
     if not os.path.isdir(base_abs):
         return out
-    for dirpath, _subdirs, filenames in os.walk(
+    for dirpath, subdirs, filenames in os.walk(
         base_abs, topdown=True, followlinks=False
     ):
+        subdirs[:] = [d for d in subdirs if is_visible(d)]
         for name in filenames:
+            if not is_visible(name):
+                continue
             out.append(os.path.abspath(os.path.join(dirpath, name)))
     return out
