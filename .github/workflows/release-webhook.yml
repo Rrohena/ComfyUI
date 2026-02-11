@@ -136,6 +136,7 @@ jobs:
           curl -fsSL \
             -X POST \
             -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
             https://api.github.com/repos/Comfy-Org/desktop/dispatches \
             -d "$PAYLOAD"
