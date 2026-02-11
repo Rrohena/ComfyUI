@@ -86,9 +86,13 @@ def cast_bias_weight_with_vbar(s, dtype, device, bias_dtype, non_blocking, compu
     cast_geometry = comfy.memory_management.tensors_to_geometries([ s.weight, s.bias ])
 
     signature = comfy_aimdo.model_vbar.vbar_fault(s._v)
-    if signature is not None:
-        xfer_dest = comfy_aimdo.torch.aimdo_to_tensor(s._v, device)
     resident = comfy_aimdo.model_vbar.vbar_signature_compare(signature, s._v_signature)
+    if signature is not None:
+        if resident:
+            xfer_dest = s._v_tensor
+        else:
+            xfer_dest = comfy_aimdo.torch.aimdo_to_tensor(s._v, device)
+            s._v_tensor = xfer_dest
 
     if not resident:
         cast_dest = None
