@@ -30,6 +30,7 @@ class State(Enum):
 
     IDLE = "IDLE"
     RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
     CANCELLING = "CANCELLING"
 
 
@@ -90,6 +91,8 @@ class AssetSeeder:
         self._errors: list[str] = []
         self._thread: threading.Thread | None = None
         self._cancel_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # Start unpaused (set = running, clear = paused)
         self._roots: tuple[RootType, ...] = ()
         self._phase: ScanPhase = ScanPhase.FULL
         self._compute_hashes: bool = False
@@ -127,6 +130,7 @@ class AssetSeeder:
             self._compute_hashes = compute_hashes
             self._progress_callback = progress_callback
             self._cancel_event.clear()
+            self._pause_event.set()  # Ensure unpaused when starting
             self._thread = threading.Thread(
                 target=self._run_scan,
                 name="AssetSeeder",
@@ -187,14 +191,93 @@ class AssetSeeder:
         """Request cancellation of the current scan.
 
         Returns:
-            True if cancellation was requested, False if not running
+            True if cancellation was requested, False if not running or paused
+        """
+        with self._lock:
+            if self._state not in (State.RUNNING, State.PAUSED):
+                return False
+            self._state = State.CANCELLING
+            self._cancel_event.set()
+            self._pause_event.set()  # Unblock if paused so thread can exit
+            return True
+
+    def stop(self) -> bool:
+        """Stop the current scan (alias for cancel).
+
+        Returns:
+            True if stop was requested, False if not running
+        """
+        return self.cancel()
+
+    def pause(self) -> bool:
+        """Pause the current scan.
+
+        The scan will complete its current batch before pausing.
+
+        Returns:
+            True if pause was requested, False if not running
         """
         with self._lock:
             if self._state != State.RUNNING:
                 return False
-            self._state = State.CANCELLING
-            self._cancel_event.set()
+            self._state = State.PAUSED
+            self._pause_event.clear()
             return True
+
+    def resume(self) -> bool:
+        """Resume a paused scan.
+
+        Returns:
+            True if resumed, False if not paused
+        """
+        with self._lock:
+            if self._state != State.PAUSED:
+                return False
+            self._state = State.RUNNING
+            self._pause_event.set()
+            self._emit_event("assets.seed.resumed", {})
+            return True
+
+    def restart(
+        self,
+        roots: tuple[RootType, ...] | None = None,
+        phase: ScanPhase | None = None,
+        progress_callback: ProgressCallback | None = None,
+        prune_first: bool | None = None,
+        compute_hashes: bool | None = None,
+        timeout: float = 5.0,
+    ) -> bool:
+        """Cancel any running scan and start a new one.
+
+        Args:
+            roots: Roots to scan (defaults to previous roots)
+            phase: Scan phase (defaults to previous phase)
+            progress_callback: Progress callback (defaults to previous)
+            prune_first: Prune before scan (defaults to previous)
+            compute_hashes: Compute hashes (defaults to previous)
+            timeout: Max seconds to wait for current scan to stop
+
+        Returns:
+            True if new scan was started, False if failed to stop previous
+        """
+        with self._lock:
+            prev_roots = self._roots
+            prev_phase = self._phase
+            prev_callback = self._progress_callback
+            prev_prune = getattr(self, "_prune_first", False)
+            prev_hashes = self._compute_hashes
+
+        self.cancel()
+        if not self.wait(timeout=timeout):
+            return False
+
+        return self.start(
+            roots=roots if roots is not None else prev_roots,
+            phase=phase if phase is not None else prev_phase,
+            progress_callback=progress_callback if progress_callback is not None else prev_callback,
+            prune_first=prune_first if prune_first is not None else prev_prune,
+            compute_hashes=compute_hashes if compute_hashes is not None else prev_hashes,
+        )
 
     def wait(self, timeout: float | None = None) -> bool:
         """Wait for the current scan to complete.
@@ -283,6 +366,21 @@ class AssetSeeder:
     def _is_cancelled(self) -> bool:
         """Check if cancellation has been requested."""
         return self._cancel_event.is_set()
+
+    def _check_pause_and_cancel(self) -> bool:
+        """Block while paused, then check if cancelled.
+
+        Call this at checkpoint locations in scan loops. It will:
+        1. Block indefinitely while paused (until resume or cancel)
+        2. Return True if cancelled, False to continue
+
+        Returns:
+            True if scan should stop, False to continue
+        """
+        if not self._pause_event.is_set():
+            self._emit_event("assets.seed.paused", {})
+        self._pause_event.wait()  # Blocks if paused
+        return self._is_cancelled()
 
     def _emit_event(self, event_type: str, data: dict) -> None:
         """Emit a WebSocket event if server is available."""
@@ -377,7 +475,7 @@ class AssetSeeder:
                 if marked > 0:
                     logging.info("Marked %d cache states as missing before scan", marked)
 
-            if self._is_cancelled():
+            if self._check_pause_and_cancel():
                 logging.info("Asset scan cancelled after pruning phase")
                 cancelled = True
                 return
@@ -388,7 +486,7 @@ class AssetSeeder:
             if phase in (ScanPhase.FAST, ScanPhase.FULL):
                 total_created, skipped_existing, total_paths = self._run_fast_phase(roots)
 
-                if self._is_cancelled():
+                if self._check_pause_and_cancel():
                     cancelled = True
                     return
 
@@ -404,7 +502,7 @@ class AssetSeeder:
 
             # Phase 2: Enrichment scan (metadata + hashes)
             if phase in (ScanPhase.ENRICH, ScanPhase.FULL):
-                if self._is_cancelled():
+                if self._check_pause_and_cancel():
                     cancelled = True
                     return
 
@@ -469,11 +567,11 @@ class AssetSeeder:
 
         existing_paths: set[str] = set()
         for r in roots:
-            if self._is_cancelled():
+            if self._check_pause_and_cancel():
                 return total_created, skipped_existing, 0
             existing_paths.update(sync_root_safely(r))
 
-        if self._is_cancelled():
+        if self._check_pause_and_cancel():
             return total_created, skipped_existing, 0
 
         paths = collect_paths_for_roots(roots)
@@ -489,7 +587,7 @@ class AssetSeeder:
         specs, tag_pool, skipped_existing = build_stub_specs(paths, existing_paths)
         self._update_progress(skipped=skipped_existing)
 
-        if self._is_cancelled():
+        if self._check_pause_and_cancel():
             return total_created, skipped_existing, total_paths
 
         batch_size = 500
@@ -497,7 +595,7 @@ class AssetSeeder:
         progress_interval = 1.0
 
         for i in range(0, len(specs), batch_size):
-            if self._is_cancelled():
+            if self._check_pause_and_cancel():
                 logging.info(
                     "Fast scan cancelled after %d/%d files (created=%d)",
                     i,
@@ -554,7 +652,7 @@ class AssetSeeder:
         )
 
         while True:
-            if self._is_cancelled():
+            if self._check_pause_and_cancel():
                 logging.info("Enrich scan cancelled after %d assets", total_enriched)
                 break
 
