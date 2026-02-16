@@ -169,7 +169,7 @@ vec3 colorize(vec3 rgb, float hue, float sat, float light) {
     float lum = dot(rgb, vec3(0.299, 0.587, 0.114));
     float l = adjustLightness(lum, light);
 
-    vec3 hsl = vec3(fract(hue), clamp(abs(sat), 0.0, 1.0), clamp(l, 0.0, 1.0));
+    vec3 hsl = vec3(fract(hue), clamp(sat, 0.0, 1.0), clamp(l, 0.0, 1.0));
     return hsl2rgb(hsl);
 }
 
