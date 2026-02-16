@@ -695,7 +695,7 @@ def _render_shader_batch(
                 gl.glBindTexture(gl.GL_TEXTURE_2D, tex)
                 data = gl.glGetTexImage(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, gl.GL_FLOAT)
                 img = np.frombuffer(data, dtype=np.float32).reshape(height, width, 4)
-                batch_outputs.append(np.ascontiguousarray(img[::-1, :, :]))
+                batch_outputs.append(img[::-1, :, :].copy())
 
             # Pad with black images for unused outputs
             black_img = np.zeros((height, width, 4), dtype=np.float32)
