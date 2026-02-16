@@ -759,10 +759,8 @@ class GLSLShader(io.ComfyNode):
             display_name="GLSL Shader",
             category="image/shader",
             description=(
-                f"Apply GLSL fragment shaders to images. "
-                f"Inputs: u_image0-{MAX_IMAGES-1} (sampler2D), u_resolution (vec2), "
-                f"u_float0-{MAX_UNIFORMS-1}, u_int0-{MAX_UNIFORMS-1}. "
-                f"Outputs: layout(location = 0-{MAX_OUTPUTS-1}) out vec4 fragColor0-{MAX_OUTPUTS-1}."
+                f"Apply GLSL ES fragment shaders to images. "
+                f"u_resolution (vec2) is always available."
             ),
             inputs=[
                 io.String.Input(
@@ -795,15 +793,15 @@ class GLSLShader(io.ComfyNode):
                     ],
                     tooltip="Output size: 'from_input' uses first input image dimensions, 'custom' allows manual size",
                 ),
-                io.Autogrow.Input("images", template=image_template),
-                io.Autogrow.Input("floats", template=float_template),
-                io.Autogrow.Input("ints", template=int_template),
+                io.Autogrow.Input("images", template=image_template, tooltip=f"Images are available as u_image0-{MAX_IMAGES-1} (sampler2D) in the shader code"),
+                io.Autogrow.Input("floats", template=float_template, tooltip=f"Floats are available as u_float0-{MAX_UNIFORMS-1} in the shader code"),
+                io.Autogrow.Input("ints", template=int_template, tooltip=f"Ints are available as u_int0-{MAX_UNIFORMS-1} in the shader code"),
             ],
             outputs=[
-                io.Image.Output(display_name="IMAGE0"),
-                io.Image.Output(display_name="IMAGE1"),
-                io.Image.Output(display_name="IMAGE2"),
-                io.Image.Output(display_name="IMAGE3"),
+                io.Image.Output(display_name="IMAGE0", tooltip="Available via layout(location = 0) out vec4 fragColor0 in the shader code"),
+                io.Image.Output(display_name="IMAGE1", tooltip="Available via layout(location = 1) out vec4 fragColor1 in the shader code"),
+                io.Image.Output(display_name="IMAGE2", tooltip="Available via layout(location = 2) out vec4 fragColor2 in the shader code"),
+                io.Image.Output(display_name="IMAGE3", tooltip="Available via layout(location = 3) out vec4 fragColor3 in the shader code"),
             ],
         )
 
