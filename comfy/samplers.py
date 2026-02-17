@@ -418,7 +418,7 @@ def _calc_cond_batch_multigpu(model: BaseModel, conds: list[list[dict]], x_in: t
             to_batch_temp.reverse()
             to_batch = to_batch_temp[:1]
 
-            free_memory = model_management.get_free_memory(current_device)
+            free_memory = comfy.model_management.get_free_memory(current_device)
             for i in range(1, len(to_batch_temp) + 1):
                 batch_amount = to_batch_temp[:len(to_batch_temp)//i]
                 input_shape = [len(batch_amount) * first_shape[0]] + list(first_shape)[1:]
@@ -487,7 +487,7 @@ def _calc_cond_batch_multigpu(model: BaseModel, conds: list[list[dict]], x_in: t
 
                     transformer_options["cond_or_uncond"] = cond_or_uncond[:]
                     transformer_options["uuids"] = uuids[:]
-                    transformer_options["sigmas"] = timestep
+                    transformer_options["sigmas"] = timestep.to(device)
                     transformer_options["sample_sigmas"] = transformer_options["sample_sigmas"].to(device)
                     transformer_options["multigpu_thread_device"] = device
 

@@ -23,6 +23,7 @@ import inspect
 import logging
 import math
 import uuid
+import copy
 from typing import Callable, Optional
 
 import torch
@@ -274,6 +275,7 @@ class ModelPatcher:
         self.is_clip = False
         self.hook_mode = comfy.hooks.EnumHookMode.MaxSpeed
 
+        self.cached_patcher_init: tuple[Callable, tuple] | tuple[Callable, tuple, int] | None = None
         self.is_multigpu_base_clone = False
         self.clone_base_uuid = uuid.uuid4()
 
@@ -368,6 +370,7 @@ class ModelPatcher:
         n.is_clip = self.is_clip
         n.hook_mode = self.hook_mode
 
+        n.cached_patcher_init = self.cached_patcher_init
         n.is_multigpu_base_clone = self.is_multigpu_base_clone
         n.clone_base_uuid = self.clone_base_uuid
 
@@ -382,12 +385,18 @@ class ModelPatcher:
         # set load device, if present
         if new_load_device is not None:
             n.load_device = new_load_device
+        if self.cached_patcher_init is not None:
+            temp_model_patcher: ModelPatcher | list[ModelPatcher] = self.cached_patcher_init[0](*self.cached_patcher_init[1])
+            if len(self.cached_patcher_init) > 2:
+                temp_model_patcher = temp_model_patcher[self.cached_patcher_init[2]]
+            n.model = temp_model_patcher.model
+        else:
+            n.model = copy.deepcopy(n.model)
         # unlike for normal clone, backup dicts that shared same ref should not;
         # otherwise, patchers that have deep copies of base models will erroneously influence each other.
         n.backup = copy.deepcopy(n.backup)
         n.object_patches_backup = copy.deepcopy(n.object_patches_backup)
         n.hook_backup = copy.deepcopy(n.hook_backup)
-        n.model = copy.deepcopy(n.model)
         # multigpu clone should not have multigpu additional_models entry
         n.remove_additional_models("multigpu")
         # multigpu_clone all stored additional_models; make sure circular references are properly handled
