@@ -23,7 +23,7 @@ class ImageCrop(IO.ComfyNode):
         return IO.Schema(
             node_id="ImageCrop",
             search_aliases=["trim"],
-            display_name="Image Crop (Deprecated)",
+            display_name="Crop Image (Deprecated)",
             category="image/transform",
             is_deprecated=True,
             inputs=[
@@ -587,6 +587,7 @@ class ImageRotate(IO.ComfyNode):
     def define_schema(cls):
         return IO.Schema(
             node_id="ImageRotate",
+            display_name="Rotate",
             search_aliases=["turn", "flip orientation"],
             category="image/transform",
             inputs=[
