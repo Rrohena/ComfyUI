@@ -288,8 +288,7 @@ def _init_cgl():
     kCGLPFAOpenGLProfile = 99
     kCGLOGLPVersion_3_2_Core = 0x3200
     kCGLPFAAccelerated = 73
-    kCGLPFAColorSize = 56
-    kCGLPFADepthSize = 12
+    kCGLPFAColorSize = 8
     kCGLPFAAllowOfflineRenderers = 96
 
     attrs = (ctypes.c_int * 9)(
