@@ -267,6 +267,64 @@ def _init_egl():
         raise
 
 
+def _init_cgl():
+    """Initialize CGL (macOS native OpenGL). Returns cgl_context. Raises RuntimeError on failure."""
+    import ctypes
+    import ctypes.util
+
+    logger.debug("_init_cgl: starting")
+
+    # Load the OpenGL framework
+    opengl_path = ctypes.util.find_library("OpenGL")
+    if not opengl_path:
+        raise RuntimeError("Could not find OpenGL framework")
+    opengl = ctypes.cdll.LoadLibrary(opengl_path)
+
+    # CGL types and constants
+    CGLPixelFormatObj = ctypes.c_void_p
+    CGLContextObj = ctypes.c_void_p
+
+    # Pixel format attributes
+    kCGLPFAOpenGLProfile = 99
+    kCGLOGLPVersion_3_2_Core = 0x3200
+    kCGLPFAAccelerated = 73
+    kCGLPFAColorSize = 56
+    kCGLPFADepthSize = 12
+    kCGLPFAAllowOfflineRenderers = 96
+
+    attrs = (ctypes.c_int * 9)(
+        kCGLPFAOpenGLProfile, kCGLOGLPVersion_3_2_Core,
+        kCGLPFAAccelerated,
+        kCGLPFAColorSize, 32,
+        kCGLPFAAllowOfflineRenderers,
+        0  # terminator
+    )
+
+    pix_fmt = CGLPixelFormatObj()
+    npix = ctypes.c_int(0)
+
+    logger.debug("_init_cgl: calling CGLChoosePixelFormat()")
+    err = opengl.CGLChoosePixelFormat(attrs, ctypes.byref(pix_fmt), ctypes.byref(npix))
+    if err != 0 or not pix_fmt:
+        raise RuntimeError(f"CGLChoosePixelFormat() failed with error {err}")
+
+    ctx = CGLContextObj()
+    logger.debug("_init_cgl: calling CGLCreateContext()")
+    err = opengl.CGLCreateContext(pix_fmt, None, ctypes.byref(ctx))
+    opengl.CGLDestroyPixelFormat(pix_fmt)
+    if err != 0 or not ctx:
+        raise RuntimeError(f"CGLCreateContext() failed with error {err}")
+
+    logger.debug("_init_cgl: calling CGLSetCurrentContext()")
+    err = opengl.CGLSetCurrentContext(ctx)
+    if err != 0:
+        opengl.CGLDestroyContext(ctx)
+        raise RuntimeError(f"CGLSetCurrentContext() failed with error {err}")
+
+    logger.debug("_init_cgl: completed successfully")
+    return ctx, opengl
+
+
 def _init_osmesa():
     """Initialize OSMesa for software rendering. Returns (context, buffer). Raises RuntimeError on failure."""
     import ctypes
@@ -332,8 +390,10 @@ class GLContext:
         self._egl_surface = None
         self._osmesa_ctx = None
         self._osmesa_buffer = None
+        self._cgl_ctx = None
+        self._cgl_lib = None
 
-        # Try backends in order: GLFW → EGL → OSMesa
+        # Try backends in order: GLFW → CGL (macOS) → EGL → OSMesa
         errors = []
 
         logger.debug("GLContext.__init__: trying GLFW backend")
@@ -344,6 +404,16 @@ class GLContext:
         except Exception as e:
             logger.debug(f"GLContext.__init__: GLFW backend failed: {e}")
             errors.append(("GLFW", e))
+
+        if self._backend is None and sys.platform == "darwin":
+            logger.debug("GLContext.__init__: trying CGL backend")
+            try:
+                self._cgl_ctx, self._cgl_lib = _init_cgl()
+                self._backend = "cgl"
+                logger.debug("GLContext.__init__: CGL backend succeeded")
+            except Exception as e:
+                logger.debug(f"GLContext.__init__: CGL backend failed: {e}")
+                errors.append(("CGL", e))
 
         if self._backend is None:
             logger.debug("GLContext.__init__: trying EGL backend")
@@ -373,8 +443,8 @@ class GLContext:
                 )
             elif sys.platform == "darwin":
                 platform_help = (
-                    "macOS: GLFW is not supported.\n"
-                    "  Install OSMesa via Homebrew: brew install mesa\n"
+                    "macOS: CGL and GLFW backends failed.\n"
+                    "  Try installing OSMesa via Homebrew: brew install mesa\n"
                     "  Then: pip install PyOpenGL PyOpenGL-accelerate"
                 )
             else:
@@ -429,6 +499,8 @@ class GLContext:
     def make_current(self):
         if self._backend == "glfw":
             glfw.make_context_current(self._window)
+        elif self._backend == "cgl":
+            self._cgl_lib.CGLSetCurrentContext(self._cgl_ctx)
         elif self._backend == "egl":
             from OpenGL.EGL import eglMakeCurrent
             eglMakeCurrent(self._egl_display, self._egl_surface, self._egl_surface, self._egl_context)
