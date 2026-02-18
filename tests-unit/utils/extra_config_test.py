@@ -301,3 +301,147 @@ def test_load_extra_path_config_no_base_path(
     actual_diffusion = folder_paths.folder_names_and_paths["diffusion_models"][0]
     assert len(actual_diffusion) == 1, "Should have one path for 'diffusion_models'."
     assert actual_diffusion[0] == os.path.abspath(expected_unet)
+
+
+@patch("builtins.open", new_callable=mock_open, read_data="dummy yaml content")
+@patch("yaml.safe_load")
+def test_load_extra_path_config_all_model_folders(
+    mock_yaml_load, _mock_file, clear_folder_paths, monkeypatch, tmp_path
+):
+    """
+    Test that when a config group has all_model_folders: true, it registers
+    base_path/{folder_name} for every known model folder type (excluding custom_nodes).
+    """
+    # Pre-populate the registry with a few folder types to simulate ComfyUI's defaults
+    folder_paths.folder_names_and_paths["checkpoints"] = ([str(tmp_path / "original" / "checkpoints")], {".safetensors"})
+    folder_paths.folder_names_and_paths["loras"] = ([str(tmp_path / "original" / "loras")], {".safetensors"})
+    folder_paths.folder_names_and_paths["vae"] = ([str(tmp_path / "original" / "vae")], {".safetensors"})
+    folder_paths.folder_names_and_paths["custom_nodes"] = ([str(tmp_path / "original" / "custom_nodes")], set())
+
+    abs_base = str(tmp_path / "shared_models")
+    config_data = {
+        "wildcard_group": {
+            "base_path": abs_base,
+            "is_default": True,
+            "all_model_folders": True,
+        }
+    }
+    mock_yaml_load.return_value = config_data
+
+    dummy_yaml_name = "dummy_wildcard.yaml"
+
+    def fake_abspath(path):
+        if path == dummy_yaml_name:
+            return os.path.join(str(tmp_path), dummy_yaml_name)
+        return path
+
+    def fake_dirname(path):
+        return str(tmp_path) if path.endswith(dummy_yaml_name) else os.path.dirname(path)
+
+    monkeypatch.setattr(os.path, "abspath", fake_abspath)
+    monkeypatch.setattr(os.path, "dirname", fake_dirname)
+
+    load_extra_path_config(dummy_yaml_name)
+
+    # Each pre-existing model folder type should now have the wildcard path prepended (is_default=True)
+    for folder_name in ["checkpoints", "loras", "vae"]:
+        paths = folder_paths.folder_names_and_paths[folder_name][0]
+        expected_wildcard_path = os.path.normpath(os.path.join(abs_base, folder_name))
+        assert paths[0] == expected_wildcard_path, \
+            f"Expected wildcard path at index 0 for '{folder_name}', got {paths[0]}"
+        assert len(paths) == 2, \
+            f"Expected 2 paths for '{folder_name}' (wildcard + original), got {len(paths)}"
+
+    # custom_nodes should NOT be included in wildcard expansion
+    custom_nodes_paths = folder_paths.folder_names_and_paths["custom_nodes"][0]
+    assert len(custom_nodes_paths) == 1, \
+        f"Expected custom_nodes to be untouched by wildcard, got {len(custom_nodes_paths)} paths"
+
+
+@patch("builtins.open", new_callable=mock_open, read_data="dummy yaml content")
+@patch("yaml.safe_load")
+def test_load_extra_path_config_all_model_folders_with_explicit_entries(
+    mock_yaml_load, _mock_file, clear_folder_paths, monkeypatch, tmp_path
+):
+    """
+    Test that all_model_folders: true works alongside explicit folder entries.
+    The wildcard covers all types, and the explicit entry adds an additional path.
+    """
+    folder_paths.folder_names_and_paths["checkpoints"] = ([str(tmp_path / "original" / "checkpoints")], {".safetensors"})
+    folder_paths.folder_names_and_paths["loras"] = ([str(tmp_path / "original" / "loras")], {".safetensors"})
+
+    abs_base = str(tmp_path / "shared_models")
+    config_data = {
+        "mixed_group": {
+            "base_path": abs_base,
+            "all_model_folders": True,
+            "checkpoints": "my_checkpoints",
+        }
+    }
+    mock_yaml_load.return_value = config_data
+
+    dummy_yaml_name = "dummy_mixed.yaml"
+
+    def fake_abspath(path):
+        if path == dummy_yaml_name:
+            return os.path.join(str(tmp_path), dummy_yaml_name)
+        return path
+
+    def fake_dirname(path):
+        return str(tmp_path) if path.endswith(dummy_yaml_name) else os.path.dirname(path)
+
+    monkeypatch.setattr(os.path, "abspath", fake_abspath)
+    monkeypatch.setattr(os.path, "dirname", fake_dirname)
+
+    load_extra_path_config(dummy_yaml_name)
+
+    # loras should have the wildcard path appended (no is_default)
+    lora_paths = folder_paths.folder_names_and_paths["loras"][0]
+    assert len(lora_paths) == 2
+    assert lora_paths[1] == os.path.normpath(os.path.join(abs_base, "loras"))
+
+    # checkpoints should have both the wildcard path AND the explicit path
+    checkpoint_paths = folder_paths.folder_names_and_paths["checkpoints"][0]
+    assert len(checkpoint_paths) == 3
+    assert checkpoint_paths[1] == os.path.normpath(os.path.join(abs_base, "checkpoints"))
+    assert checkpoint_paths[2] == os.path.normpath(os.path.join(abs_base, "my_checkpoints"))
+
+
+@patch("builtins.open", new_callable=mock_open, read_data="dummy yaml content")
+@patch("yaml.safe_load")
+def test_load_extra_path_config_base_path_only_no_flag(
+    mock_yaml_load, _mock_file, clear_folder_paths, monkeypatch, tmp_path
+):
+    """
+    Test that base_path alone (without all_model_folders) does NOT trigger
+    wildcard expansion — it just has no effect without explicit folder entries.
+    """
+    folder_paths.folder_names_and_paths["checkpoints"] = ([str(tmp_path / "original" / "checkpoints")], {".safetensors"})
+    folder_paths.folder_names_and_paths["loras"] = ([str(tmp_path / "original" / "loras")], {".safetensors"})
+
+    abs_base = str(tmp_path / "shared_models")
+    config_data = {
+        "base_only_group": {
+            "base_path": abs_base,
+        }
+    }
+    mock_yaml_load.return_value = config_data
+
+    dummy_yaml_name = "dummy_base_only.yaml"
+
+    def fake_abspath(path):
+        if path == dummy_yaml_name:
+            return os.path.join(str(tmp_path), dummy_yaml_name)
+        return path
+
+    def fake_dirname(path):
+        return str(tmp_path) if path.endswith(dummy_yaml_name) else os.path.dirname(path)
+
+    monkeypatch.setattr(os.path, "abspath", fake_abspath)
+    monkeypatch.setattr(os.path, "dirname", fake_dirname)
+
+    load_extra_path_config(dummy_yaml_name)
+
+    # Nothing should have changed — no wildcard, no explicit entries
+    assert len(folder_paths.folder_names_and_paths["checkpoints"][0]) == 1
+    assert len(folder_paths.folder_names_and_paths["loras"][0]) == 1

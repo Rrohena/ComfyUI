@@ -53,3 +53,14 @@
 #    checkpoints: models/checkpoints
 #    gligen: models/gligen
 #    custom_nodes: path/custom_nodes
+
+
+# all_model_folders: when set to true alongside base_path, automatically registers
+# base_path/{folder_name} for every model folder type known to ComfyUI.
+# custom_nodes is excluded. This keeps configs in sync as new model types are added.
+# Can be combined with explicit entries to add extra paths for specific types.
+
+#shared_models:
+#    base_path: /path/to/shared/models
+#    is_default: true
+#    all_model_folders: true
