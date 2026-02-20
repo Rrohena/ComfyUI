@@ -710,6 +710,15 @@ class Flux(supported_models_base.BASE):
 
     supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
 
+    def process_unet_state_dict(self, state_dict):
+        out_sd = {}
+        for k in list(state_dict.keys()):
+            key_out = k
+            if key_out.endswith("_norm.scale"):
+                key_out = "{}.weight".format(key_out[:-len(".scale")])
+            out_sd[key_out] = state_dict[k]
+        return out_sd
+
     vae_key_prefix = ["vae."]
     text_encoder_key_prefix = ["text_encoders."]
 
@@ -898,11 +907,13 @@ class HunyuanVideo(supported_models_base.BASE):
             key_out = key_out.replace("txt_in.c_embedder.linear_1.", "txt_in.c_embedder.in_layer.").replace("txt_in.c_embedder.linear_2.", "txt_in.c_embedder.out_layer.")
             key_out = key_out.replace("_mod.linear.", "_mod.lin.").replace("_attn_qkv.", "_attn.qkv.")
             key_out = key_out.replace("mlp.fc1.", "mlp.0.").replace("mlp.fc2.", "mlp.2.")
-            key_out = key_out.replace("_attn_q_norm.weight", "_attn.norm.query_norm.scale").replace("_attn_k_norm.weight", "_attn.norm.key_norm.scale")
-            key_out = key_out.replace(".q_norm.weight", ".norm.query_norm.scale").replace(".k_norm.weight", ".norm.key_norm.scale")
+            key_out = key_out.replace("_attn_q_norm.weight", "_attn.norm.query_norm.weight").replace("_attn_k_norm.weight", "_attn.norm.key_norm.weight")
+            key_out = key_out.replace(".q_norm.weight", ".norm.query_norm.weight").replace(".k_norm.weight", ".norm.key_norm.weight")
             key_out = key_out.replace("_attn_proj.", "_attn.proj.")
             key_out = key_out.replace(".modulation.linear.", ".modulation.lin.")
             key_out = key_out.replace("_in.mlp.2.", "_in.out_layer.").replace("_in.mlp.0.", "_in.in_layer.")
+            if key_out.endswith(".scale"):
+                key_out = "{}.weight".format(key_out[:-len(".scale")])
             out_sd[key_out] = state_dict[k]
         return out_sd
 
@@ -993,7 +1004,7 @@ class CosmosT2IPredict2(supported_models_base.BASE):
 
     memory_usage_factor = 1.0
 
-    supported_inference_dtypes = [torch.bfloat16, torch.float32]
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
 
     def __init__(self, unet_config):
         super().__init__(unet_config)
@@ -1023,11 +1034,7 @@ class Anima(supported_models_base.BASE):
 
     memory_usage_factor = 1.0
 
-    supported_inference_dtypes = [torch.bfloat16, torch.float32]
-
-    def __init__(self, unet_config):
-        super().__init__(unet_config)
-        self.memory_usage_factor = (unet_config.get("model_channels", 2048) / 2048) * 0.95
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
 
     def get_model(self, state_dict, prefix="", device=None):
         out = model_base.Anima(self, device=device)
@@ -1037,6 +1044,12 @@ class Anima(supported_models_base.BASE):
         pref = self.text_encoder_key_prefix[0]
         detect = comfy.text_encoders.hunyuan_video.llama_detect(state_dict, "{}qwen3_06b.transformer.".format(pref))
         return supported_models_base.ClipTarget(comfy.text_encoders.anima.AnimaTokenizer, comfy.text_encoders.anima.te(**detect))
+
+    def set_inference_dtype(self, dtype, manual_cast_dtype, **kwargs):
+        self.memory_usage_factor = (self.unet_config.get("model_channels", 2048) / 2048) * 0.95
+        if dtype is torch.float16:
+            self.memory_usage_factor *= 1.4
+        return super().set_inference_dtype(dtype, manual_cast_dtype, **kwargs)
 
 class CosmosI2VPredict2(CosmosT2IPredict2):
     unet_config = {
@@ -1262,6 +1275,15 @@ class Hunyuan3Dv2(supported_models_base.BASE):
 
     latent_format = latent_formats.Hunyuan3Dv2
 
+    def process_unet_state_dict(self, state_dict):
+        out_sd = {}
+        for k in list(state_dict.keys()):
+            key_out = k
+            if key_out.endswith(".scale"):
+                key_out = "{}.weight".format(key_out[:-len(".scale")])
+            out_sd[key_out] = state_dict[k]
+        return out_sd
+
     def process_unet_state_dict_for_saving(self, state_dict):
         replace_prefix = {"": "model."}
         return utils.state_dict_prefix_replace(state_dict, replace_prefix)
@@ -1339,6 +1361,14 @@ class Chroma(supported_models_base.BASE):
 
     supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
 
+    def process_unet_state_dict(self, state_dict):
+        out_sd = {}
+        for k in list(state_dict.keys()):
+            key_out = k
+            if key_out.endswith(".scale"):
+                key_out = "{}.weight".format(key_out[:-len(".scale")])
+            out_sd[key_out] = state_dict[k]
+        return out_sd
 
     def get_model(self, state_dict, prefix="", device=None):
         out = model_base.Chroma(self, device=device)

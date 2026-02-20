@@ -77,6 +77,7 @@ class Blur(io.ComfyNode):
         return io.Schema(
             node_id="ImageBlur",
             category="image/postprocessing",
+            essentials_category="Image Tools",
             inputs=[
                 io.Image.Input("image"),
                 io.Int.Input("blur_radius", default=1, min=1, max=31, step=1),
@@ -654,6 +655,7 @@ class BatchImagesMasksLatentsNode(io.ComfyNode):
         else:
             batched = batch_masks(values)
         return io.NodeOutput(batched)
+
 
 class PostProcessingExtension(ComfyExtension):
     @override
