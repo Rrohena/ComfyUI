@@ -944,6 +944,34 @@ async def validate_inputs(prompt_id, prompt, item, validated):
                     errors.append(error)
                     continue
 
+                if input_type == "STRING":
+                    if "minLength" in extra_info and len(val.strip()) < extra_info["minLength"]:
+                        error = {
+                            "type": "value_shorter_than_min_length",
+                            "message": "Value length {} shorter than min length of {}".format(len(val.strip()), extra_info["minLength"]),
+                            "details": f"{x}",
+                            "extra_info": {
+                                "input_name": x,
+                                "input_config": info,
+                                "received_value": val,
+                            }
+                        }
+                        errors.append(error)
+                        continue
+                    if "maxLength" in extra_info and len(val) > extra_info["maxLength"]:
+                        error = {
+                            "type": "value_longer_than_max_length",
+                            "message": "Value length {} longer than max length of {}".format(len(val), extra_info["maxLength"]),
+                            "details": f"{x}",
+                            "extra_info": {
+                                "input_name": x,
+                                "input_config": info,
+                                "received_value": val,
+                            }
+                        }
+                        errors.append(error)
+                        continue
+
                 if isinstance(input_type, list) or input_type == io.Combo.io_type:
                     if input_type == io.Combo.io_type:
                         combo_options = extra_info.get("options", [])
