@@ -42,7 +42,6 @@ class SubgraphManager:
     def __init__(self):
         self.cached_custom_node_subgraphs: dict[SubgraphEntry] | None = None
         self.cached_blueprint_subgraphs: dict[SubgraphEntry] | None = None
-        self.distribution = os.environ.get("DISTRIBUTION", "localhost")
 
     def _create_entry(self, file: str, source: str, node_pack: str) -> tuple[str, SubgraphEntry]:
         """Create a subgraph entry from a file path. Expects normalized path (forward slashes)."""
@@ -121,12 +120,7 @@ class SubgraphManager:
                         logging.warning("Blueprint entry missing 'name' in category '%s', skipping", module_name)
                         continue
 
-                    include_on = blueprint.get("includeOnDistributions")
-                    if include_on is not None and self.distribution not in include_on:
-                        continue
-
-                    file_by_dist = blueprint.get("fileByDistribution", {})
-                    filename = file_by_dist.get(self.distribution, f"{name}.json")
+                    filename = f"{name}.json"
                     filepath = os.path.realpath(os.path.join(blueprints_dir, filename))
                     if not filepath.startswith(os.path.realpath(blueprints_dir) + os.sep):
                         logging.warning("Blueprint path escapes blueprints directory: %s", filepath)
@@ -137,6 +131,13 @@ class SubgraphManager:
                         continue
 
                     entry_id, entry = self._create_entry(filepath, Source.templates, module_name)
+                    info = entry["info"]
+                    include_on = blueprint.get("includeOnDistributions")
+                    if include_on is not None:
+                        info["includeOnDistributions"] = include_on
+                    requires = blueprint.get("requiresCustomNodes")
+                    if requires is not None:
+                        info["requiresCustomNodes"] = requires
                     subgraphs_dict[entry_id] = entry
         elif os.path.exists(blueprints_dir):
             logging.warning("No blueprint index.json found at %s, falling back to glob", index_path)
