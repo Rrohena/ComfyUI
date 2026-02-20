@@ -1224,13 +1224,30 @@ class PromptServer():
         return json_data
 
     def send_progress_text(
-        self, text: Union[bytes, bytearray, str], node_id: str, sid=None
+        self, text: Union[bytes, bytearray, str], node_id: str, prompt_id: Optional[str] = None, sid=None
     ):
         if isinstance(text, str):
             text = text.encode("utf-8")
         node_id_bytes = str(node_id).encode("utf-8")
 
-        # Pack the node_id length as a 4-byte unsigned integer, followed by the node_id bytes
-        message = struct.pack(">I", len(node_id_bytes)) + node_id_bytes + text
+        # When prompt_id is provided and client supports the new format,
+        # prepend prompt_id as a length-prefixed field before node_id
+        target_sid = sid if sid is not None else self.client_id
+        if prompt_id and feature_flags.supports_feature(
+            self.sockets_metadata, target_sid, "supports_progress_text_metadata"
+        ):
+            prompt_id_bytes = prompt_id.encode("utf-8")
+            # Pack prompt_id length as a 4-byte unsigned integer, followed by prompt_id bytes,
+            # then node_id length as a 4-byte unsigned integer, followed by node_id bytes, then text
+            message = (
+                struct.pack(">I", len(prompt_id_bytes))
+                + prompt_id_bytes
+                + struct.pack(">I", len(node_id_bytes))
+                + node_id_bytes
+                + text
+            )
+        else:
+            # Pack the node_id length as a 4-byte unsigned integer, followed by the node_id bytes
+            message = struct.pack(">I", len(node_id_bytes)) + node_id_bytes + text
 
         self.send_sync(BinaryEventTypes.TEXT, message, sid)

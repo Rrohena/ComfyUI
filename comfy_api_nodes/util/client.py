@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from comfy import utils
 from comfy_api.latest import IO
+from comfy_execution.utils import get_executing_context
 from server import PromptServer
 
 from . import request_logger
@@ -436,7 +437,9 @@ def _display_text(
     if text is not None:
         display_lines.append(text)
     if display_lines:
-        PromptServer.instance.send_progress_text("\n".join(display_lines), get_node_id(node_cls))
+        ctx = get_executing_context()
+        prompt_id = ctx.prompt_id if ctx is not None else None
+        PromptServer.instance.send_progress_text("\n".join(display_lines), get_node_id(node_cls), prompt_id=prompt_id)
 
 
 def _display_time_progress(
