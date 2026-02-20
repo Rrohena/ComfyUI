@@ -499,7 +499,9 @@ class Vidu2TextToVideoNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    tooltip="A textual description for video generation, with a maximum length of 2000 characters.",
+                    min_length=1,
+                    max_length=2000,
+                    tooltip="A textual description for video generation.",
                 ),
                 IO.Int.Input(
                     "duration",
@@ -560,7 +562,6 @@ class Vidu2TextToVideoNode(IO.ComfyNode):
         resolution: str,
         background_music: bool,
     ) -> IO.NodeOutput:
-        validate_string(prompt, min_length=1, max_length=2000)
         results = await execute_task(
             cls,
             VIDU_TEXT_TO_VIDEO,
@@ -596,7 +597,8 @@ class Vidu2ImageToVideoNode(IO.ComfyNode):
                     "prompt",
                     multiline=True,
                     default="",
-                    tooltip="An optional text prompt for video generation (max 2000 characters).",
+                    max_length=2000,
+                    tooltip="An optional text prompt for video generation.",
                 ),
                 IO.Int.Input(
                     "duration",
@@ -685,7 +687,6 @@ class Vidu2ImageToVideoNode(IO.ComfyNode):
         if get_number_of_images(image) > 1:
             raise ValueError("Only one input image is allowed.")
         validate_image_aspect_ratio(image, (1, 4), (4, 1))
-        validate_string(prompt, max_length=2000)
         results = await execute_task(
             cls,
             VIDU_IMAGE_TO_VIDEO,
@@ -731,6 +732,8 @@ class Vidu2ReferenceVideoNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
+                    min_length=1,
+                    max_length=2000,
                     tooltip="When enabled, the video will include generated speech and background music "
                     "based on the prompt.",
                 ),
@@ -802,7 +805,6 @@ class Vidu2ReferenceVideoNode(IO.ComfyNode):
         resolution: str,
         movement_amplitude: str,
     ) -> IO.NodeOutput:
-        validate_string(prompt, min_length=1, max_length=2000)
         total_images = 0
         for i in subjects:
             if get_number_of_images(subjects[i]) > 3:
@@ -858,7 +860,8 @@ class Vidu2StartEndToVideoNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    tooltip="Prompt description (max 2000 characters).",
+                    max_length=2000,
+                    tooltip="Prompt description.",
                 ),
                 IO.Int.Input(
                     "duration",
@@ -940,7 +943,6 @@ class Vidu2StartEndToVideoNode(IO.ComfyNode):
         resolution: str,
         movement_amplitude: str,
     ) -> IO.NodeOutput:
-        validate_string(prompt, max_length=2000)
         if get_number_of_images(first_frame) > 1:
             raise ValueError("Only one input image is allowed for `first_frame`.")
         if get_number_of_images(end_frame) > 1:
@@ -1024,7 +1026,8 @@ class ViduExtendVideoNode(IO.ComfyNode):
                     "prompt",
                     multiline=True,
                     default="",
-                    tooltip="An optional text prompt for the extended video (max 2000 characters).",
+                    max_length=2000,
+                    tooltip="An optional text prompt for the extended video.",
                 ),
                 IO.Int.Input(
                     "seed",
@@ -1078,7 +1081,6 @@ class ViduExtendVideoNode(IO.ComfyNode):
         seed: int,
         end_frame: Input.Image | None = None,
     ) -> IO.NodeOutput:
-        validate_string(prompt, max_length=2000)
         validate_video_duration(video, min_duration=4, max_duration=55)
         image_url = None
         if end_frame is not None:
@@ -1357,7 +1359,9 @@ class Vidu3TextToVideoNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    tooltip="A textual description for video generation, with a maximum length of 2000 characters.",
+                    min_length=1,
+                    max_length=2000,
+                    tooltip="A textual description for video generation.",
                 ),
                 IO.Int.Input(
                     "seed",
@@ -1405,7 +1409,6 @@ class Vidu3TextToVideoNode(IO.ComfyNode):
         prompt: str,
         seed: int,
     ) -> IO.NodeOutput:
-        validate_string(prompt, min_length=1, max_length=2000)
         results = await execute_task(
             cls,
             VIDU_TEXT_TO_VIDEO,
@@ -1497,7 +1500,8 @@ class Vidu3ImageToVideoNode(IO.ComfyNode):
                     "prompt",
                     multiline=True,
                     default="",
-                    tooltip="An optional text prompt for video generation (max 2000 characters).",
+                    max_length=2000,
+                    tooltip="An optional text prompt for video generation.",
                 ),
                 IO.Int.Input(
                     "seed",
@@ -1547,7 +1551,6 @@ class Vidu3ImageToVideoNode(IO.ComfyNode):
         seed: int,
     ) -> IO.NodeOutput:
         validate_image_aspect_ratio(image, (1, 4), (4, 1))
-        validate_string(prompt, max_length=2000)
         results = await execute_task(
             cls,
             VIDU_IMAGE_TO_VIDEO,
@@ -1636,7 +1639,8 @@ class Vidu3StartEndToVideoNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    tooltip="Prompt description (max 2000 characters).",
+                    max_length=2000,
+                    tooltip="Prompt description.",
                 ),
                 IO.Int.Input(
                     "seed",
@@ -1686,7 +1690,6 @@ class Vidu3StartEndToVideoNode(IO.ComfyNode):
         prompt: str,
         seed: int,
     ) -> IO.NodeOutput:
-        validate_string(prompt, max_length=2000)
         validate_images_aspect_ratio_closeness(first_frame, end_frame, min_rel=0.8, max_rel=1.25, strict=False)
         payload = TaskCreationRequest(
             model=model["model"],

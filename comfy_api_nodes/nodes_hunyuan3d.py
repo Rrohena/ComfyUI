@@ -23,7 +23,6 @@ from comfy_api_nodes.util import (
     upload_3d_model_to_comfyapi,
     upload_image_to_comfyapi,
     validate_image_dimensions,
-    validate_string,
 )
 
 
@@ -61,7 +60,7 @@ class TencentTextToModelNode(IO.ComfyNode):
                     options=["3.0", "3.1"],
                     tooltip="The LowPoly option is unavailable for the `3.1` model.",
                 ),
-                IO.String.Input("prompt", multiline=True, default="", tooltip="Supports up to 1024 characters."),
+                IO.String.Input("prompt", multiline=True, default="", min_length=1, max_length=1024),
                 IO.Int.Input("face_count", default=500000, min=40000, max=1500000),
                 IO.DynamicCombo.Input(
                     "generate_type",
@@ -123,7 +122,6 @@ class TencentTextToModelNode(IO.ComfyNode):
         seed: int,
     ) -> IO.NodeOutput:
         _ = seed
-        validate_string(prompt, field_name="prompt", min_length=1, max_length=1024)
         if model == "3.1" and generate_type["generate_type"].lower() == "lowpoly":
             raise ValueError("The LowPoly option is currently unavailable for the 3.1 model.")
         response = await sync_op(
@@ -417,7 +415,9 @@ class Tencent3DTextureEditNode(IO.ComfyNode):
                     "prompt",
                     multiline=True,
                     default="",
-                    tooltip="Describes texture editing. Supports up to 1024 UTF-8 characters.",
+                    min_length=1,
+                    max_length=1024,
+                    tooltip="Describes texture editing.",
                 ),
                 IO.Int.Input(
                     "seed",
@@ -456,7 +456,6 @@ class Tencent3DTextureEditNode(IO.ComfyNode):
         file_format = model_3d.format.lower()
         if file_format != "fbx":
             raise ValueError(f"Unsupported file format: '{file_format}'. Only FBX format is supported.")
-        validate_string(prompt, field_name="prompt", min_length=1, max_length=1024)
         model_url = await upload_3d_model_to_comfyapi(cls, model_3d, file_format)
         response = await sync_op(
             cls,
