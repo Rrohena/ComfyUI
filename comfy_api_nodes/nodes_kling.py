@@ -91,8 +91,7 @@ def _generate_storyboard_inputs(count: int) -> list:
                     f"storyboard_{i}_prompt",
                     multiline=True,
                     default="",
-                    max_length=512,
-                    tooltip=f"Prompt for storyboard segment {i}.",
+                    tooltip=f"Prompt for storyboard segment {i}. Max 512 characters.",
                 ),
                 IO.Int.Input(
                     f"storyboard_{i}_duration",
@@ -310,6 +309,19 @@ def is_valid_image_response(response: KlingVirtualTryOnResponse) -> bool:
     )
 
 
+def validate_prompts(prompt: str, negative_prompt: str, max_length: int) -> bool:
+    """Verifies that the positive prompt is not empty and that neither promt is too long."""
+    if not prompt:
+        raise ValueError("Positive prompt is empty")
+    if len(prompt) > max_length:
+        raise ValueError(f"Positive prompt is too long: {len(prompt)} characters")
+    if negative_prompt and len(negative_prompt) > max_length:
+        raise ValueError(
+            f"Negative prompt is too long: {len(negative_prompt)} characters"
+        )
+    return True
+
+
 def validate_task_creation_response(response) -> None:
     """Validates that the Kling task creation request was successful."""
     if not is_valid_task_creation_response(response):
@@ -412,6 +424,7 @@ async def execute_text2video(
     aspect_ratio: str,
     camera_control: KlingCameraControl | None = None,
 ) -> IO.NodeOutput:
+    validate_prompts(prompt, negative_prompt, MAX_PROMPT_LENGTH_T2V)
     task_creation_response = await sync_op(
         cls,
         ApiEndpoint(path=PATH_TEXT_TO_VIDEO, method="POST"),
@@ -457,6 +470,7 @@ async def execute_image2video(
     camera_control: KlingCameraControl | None = None,
     end_frame: torch.Tensor | None = None,
 ) -> IO.NodeOutput:
+    validate_prompts(prompt, negative_prompt, MAX_PROMPT_LENGTH_I2V)
     validate_input_image(start_frame)
 
     if camera_control is not None:
@@ -566,6 +580,8 @@ async def execute_lipsync(
     voice_speed: float | None = None,
     voice_id: str | None = None,
 ) -> IO.NodeOutput:
+    if text:
+        validate_string(text, field_name="Text", max_length=MAX_PROMPT_LENGTH_LIP_SYNC)
     validate_video_dimensions(video, 720, 1920)
     validate_video_duration(video, 2, 10)
 
@@ -747,8 +763,8 @@ class KlingTextToVideoNode(IO.ComfyNode):
             category="api node/video/Kling",
             description="Kling Text to Video Node",
             inputs=[
-                IO.String.Input("prompt", multiline=True, min_length=1, max_length=2500, tooltip="Positive text prompt"),
-                IO.String.Input("negative_prompt", multiline=True, max_length=2500, tooltip="Negative text prompt"),
+                IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt"),
+                IO.String.Input("negative_prompt", multiline=True, tooltip="Negative text prompt"),
                 IO.Float.Input("cfg_scale", default=1.0, min=0.0, max=1.0),
                 IO.Combo.Input(
                     "aspect_ratio",
@@ -1336,8 +1352,6 @@ class OmniProVideoToVideoNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    min_length=1,
-                    max_length=2500,
                     tooltip="A text prompt describing the video content. "
                     "This can include both positive and negative descriptions.",
                 ),
@@ -1399,6 +1413,7 @@ class OmniProVideoToVideoNode(IO.ComfyNode):
     ) -> IO.NodeOutput:
         _ = seed
         prompt = normalize_omni_prompt_references(prompt)
+        validate_string(prompt, min_length=1, max_length=2500)
         validate_video_duration(reference_video, min_duration=3.0, max_duration=10.05)
         validate_video_dimensions(reference_video, min_width=720, min_height=720, max_width=2160, max_height=2160)
         image_list: list[OmniParamImage] = []
@@ -1448,8 +1463,6 @@ class OmniProEditVideoNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    min_length=1,
-                    max_length=2500,
                     tooltip="A text prompt describing the video content. "
                     "This can include both positive and negative descriptions.",
                 ),
@@ -1507,6 +1520,7 @@ class OmniProEditVideoNode(IO.ComfyNode):
     ) -> IO.NodeOutput:
         _ = seed
         prompt = normalize_omni_prompt_references(prompt)
+        validate_string(prompt, min_length=1, max_length=2500)
         validate_video_duration(video, min_duration=3.0, max_duration=10.05)
         validate_video_dimensions(video, min_width=720, min_height=720, max_width=2160, max_height=2160)
         image_list: list[OmniParamImage] = []
@@ -1556,8 +1570,6 @@ class OmniProImageNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    min_length=1,
-                    max_length=2500,
                     tooltip="A text prompt describing the image content. "
                     "This can include both positive and negative descriptions.",
                 ),
@@ -1626,6 +1638,7 @@ class OmniProImageNode(IO.ComfyNode):
         if model_name == "kling-image-o1" and resolution == "4K":
             raise ValueError("4K resolution is not supported for kling-image-o1 model.")
         prompt = normalize_omni_prompt_references(prompt)
+        validate_string(prompt, min_length=1, max_length=2500)
         image_list: list[OmniImageParamImage] = []
         if reference_images is not None:
             if get_number_of_images(reference_images) > 10:
@@ -1681,8 +1694,8 @@ class KlingCameraControlT2VNode(IO.ComfyNode):
             category="api node/video/Kling",
             description="Transform text into cinematic videos with professional camera movements that simulate real-world cinematography. Control virtual camera actions including zoom, rotation, pan, tilt, and first-person view, while maintaining focus on your original text.",
             inputs=[
-                IO.String.Input("prompt", multiline=True, min_length=1, max_length=2500, tooltip="Positive text prompt"),
-                IO.String.Input("negative_prompt", multiline=True, max_length=2500, tooltip="Negative text prompt"),
+                IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt"),
+                IO.String.Input("negative_prompt", multiline=True, tooltip="Negative text prompt"),
                 IO.Float.Input("cfg_scale", default=0.75, min=0.0, max=1.0),
                 IO.Combo.Input(
                     "aspect_ratio",
@@ -1743,8 +1756,8 @@ class KlingImage2VideoNode(IO.ComfyNode):
             category="api node/video/Kling",
             inputs=[
                 IO.Image.Input("start_frame", tooltip="The reference image used to generate the video."),
-                IO.String.Input("prompt", multiline=True, min_length=1, max_length=500, tooltip="Positive text prompt"),
-                IO.String.Input("negative_prompt", multiline=True, max_length=500, tooltip="Negative text prompt"),
+                IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt"),
+                IO.String.Input("negative_prompt", multiline=True, tooltip="Negative text prompt"),
                 IO.Combo.Input(
                     "model_name",
                     options=KlingVideoGenModelName,
@@ -1846,8 +1859,8 @@ class KlingCameraControlI2VNode(IO.ComfyNode):
                     "start_frame",
                     tooltip="Reference Image - URL or Base64 encoded string, cannot exceed 10MB, resolution not less than 300*300px, aspect ratio between 1:2.5 ~ 2.5:1. Base64 should not include data:image prefix.",
                 ),
-                IO.String.Input("prompt", multiline=True, min_length=1, max_length=500, tooltip="Positive text prompt"),
-                IO.String.Input("negative_prompt", multiline=True, max_length=500, tooltip="Negative text prompt"),
+                IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt"),
+                IO.String.Input("negative_prompt", multiline=True, tooltip="Negative text prompt"),
                 IO.Float.Input("cfg_scale", default=0.75, min=0.0, max=1.0),
                 IO.Combo.Input(
                     "aspect_ratio",
@@ -1921,8 +1934,8 @@ class KlingStartEndFrameNode(IO.ComfyNode):
                     "end_frame",
                     tooltip="Reference Image - End frame control. URL or Base64 encoded string, cannot exceed 10MB, resolution not less than 300*300px. Base64 should not include data:image prefix.",
                 ),
-                IO.String.Input("prompt", multiline=True, min_length=1, max_length=500, tooltip="Positive text prompt"),
-                IO.String.Input("negative_prompt", multiline=True, max_length=500, tooltip="Negative text prompt"),
+                IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt"),
+                IO.String.Input("negative_prompt", multiline=True, tooltip="Negative text prompt"),
                 IO.Float.Input("cfg_scale", default=0.5, min=0.0, max=1.0),
                 IO.Combo.Input("aspect_ratio", options=["16:9", "9:16", "1:1"]),
                 IO.Combo.Input(
@@ -2010,14 +2023,11 @@ class KlingVideoExtendNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    min_length=1,
-                    max_length=2500,
                     tooltip="Positive text prompt for guiding the video extension",
                 ),
                 IO.String.Input(
                     "negative_prompt",
                     multiline=True,
-                    max_length=2500,
                     tooltip="Negative text prompt for elements to avoid in the extended video",
                 ),
                 IO.Float.Input("cfg_scale", default=0.5, min=0.0, max=1.0),
@@ -2051,6 +2061,7 @@ class KlingVideoExtendNode(IO.ComfyNode):
         cfg_scale: float,
         video_id: str,
     ) -> IO.NodeOutput:
+        validate_prompts(prompt, negative_prompt, MAX_PROMPT_LENGTH_T2V)
         task_creation_response = await sync_op(
             cls,
             ApiEndpoint(path=PATH_VIDEO_EXTEND, method="POST"),
@@ -2309,8 +2320,7 @@ class KlingLipSyncTextToVideoNode(IO.ComfyNode):
                 IO.String.Input(
                     "text",
                     multiline=True,
-                    max_length=120,
-                    tooltip="Text Content for Lip-Sync Video Generation. Required when mode is text2video.",
+                    tooltip="Text Content for Lip-Sync Video Generation. Required when mode is text2video. Maximum length is 120 characters.",
                 ),
                 IO.Combo.Input(
                     "voice",
@@ -2441,8 +2451,8 @@ class KlingImageGenerationNode(IO.ComfyNode):
             category="api node/image/Kling",
             description="Kling Image Generation Node. Generate an image from a text prompt with an optional reference image.",
             inputs=[
-                IO.String.Input("prompt", multiline=True, min_length=1, max_length=500, tooltip="Positive text prompt"),
-                IO.String.Input("negative_prompt", multiline=True, max_length=500, tooltip="Negative text prompt"),
+                IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt"),
+                IO.String.Input("negative_prompt", multiline=True, tooltip="Negative text prompt"),
                 IO.Combo.Input(
                     "image_type",
                     options=[i.value for i in KlingImageGenImageReferenceType],
@@ -2533,6 +2543,8 @@ class KlingImageGenerationNode(IO.ComfyNode):
         seed: int = 0,
     ) -> IO.NodeOutput:
         _ = seed
+        validate_string(prompt, field_name="prompt", min_length=1, max_length=MAX_PROMPT_LENGTH_IMAGE_GEN)
+        validate_string(negative_prompt, field_name="negative_prompt", max_length=MAX_PROMPT_LENGTH_IMAGE_GEN)
         task_creation_response = await sync_op(
             cls,
             ApiEndpoint(path=PATH_IMAGE_GENERATIONS, method="POST"),
@@ -2576,7 +2588,7 @@ class TextToVideoWithAudio(IO.ComfyNode):
             category="api node/video/Kling",
             inputs=[
                 IO.Combo.Input("model_name", options=["kling-v2-6"]),
-                IO.String.Input("prompt", multiline=True, min_length=1, max_length=2500, tooltip="Positive text prompt."),
+                IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt."),
                 IO.Combo.Input("mode", options=["pro"]),
                 IO.Combo.Input("aspect_ratio", options=["16:9", "9:16", "1:1"]),
                 IO.Combo.Input("duration", options=[5, 10]),
@@ -2607,6 +2619,7 @@ class TextToVideoWithAudio(IO.ComfyNode):
         duration: int,
         generate_audio: bool,
     ) -> IO.NodeOutput:
+        validate_string(prompt, min_length=1, max_length=2500)
         response = await sync_op(
             cls,
             ApiEndpoint(path="/proxy/kling/v1/videos/text2video", method="POST"),
@@ -2644,7 +2657,7 @@ class ImageToVideoWithAudio(IO.ComfyNode):
             inputs=[
                 IO.Combo.Input("model_name", options=["kling-v2-6"]),
                 IO.Image.Input("start_frame"),
-                IO.String.Input("prompt", multiline=True, min_length=1, max_length=2500, tooltip="Positive text prompt."),
+                IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt."),
                 IO.Combo.Input("mode", options=["pro"]),
                 IO.Combo.Input("duration", options=[5, 10]),
                 IO.Boolean.Input("generate_audio", default=True, advanced=True),
@@ -2674,6 +2687,7 @@ class ImageToVideoWithAudio(IO.ComfyNode):
         duration: int,
         generate_audio: bool,
     ) -> IO.NodeOutput:
+        validate_string(prompt, min_length=1, max_length=2500)
         validate_image_dimensions(start_frame, min_width=300, min_height=300)
         validate_image_aspect_ratio(start_frame, (1, 2.5), (2.5, 1))
         response = await sync_op(
@@ -2711,7 +2725,7 @@ class MotionControl(IO.ComfyNode):
             display_name="Kling Motion Control",
             category="api node/video/Kling",
             inputs=[
-                IO.String.Input("prompt", multiline=True, max_length=2500),
+                IO.String.Input("prompt", multiline=True),
                 IO.Image.Input("reference_image"),
                 IO.Video.Input(
                     "reference_video",
@@ -2762,6 +2776,7 @@ class MotionControl(IO.ComfyNode):
         character_orientation: str,
         mode: str,
     ) -> IO.NodeOutput:
+        validate_string(prompt, max_length=2500)
         validate_image_dimensions(reference_image, min_width=340, min_height=340)
         validate_image_aspect_ratio(reference_image, (1, 2.5), (2.5, 1))
         if character_orientation == "image":
@@ -3019,7 +3034,7 @@ class KlingFirstLastFrameNode(IO.ComfyNode):
             category="api node/video/Kling",
             description="Generate videos with Kling V3 using first and last frames.",
             inputs=[
-                IO.String.Input("prompt", multiline=True, default="", min_length=1, max_length=2500),
+                IO.String.Input("prompt", multiline=True, default=""),
                 IO.Int.Input(
                     "duration",
                     default=5,
@@ -3090,6 +3105,7 @@ class KlingFirstLastFrameNode(IO.ComfyNode):
         seed: int,
     ) -> IO.NodeOutput:
         _ = seed
+        validate_string(prompt, min_length=1, max_length=2500)
         validate_image_dimensions(first_frame, min_width=300, min_height=300)
         validate_image_aspect_ratio(first_frame, (1, 2.5), (2.5, 1))
         validate_image_dimensions(end_frame, min_width=300, min_height=300)

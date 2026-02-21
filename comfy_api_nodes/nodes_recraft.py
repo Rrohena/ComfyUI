@@ -30,6 +30,7 @@ from comfy_api_nodes.util import (
     resize_mask_to_image,
     sync_op,
     tensor_to_bytesio,
+    validate_string,
 )
 from comfy_extras.nodes_images import SVG
 
@@ -402,14 +403,7 @@ class RecraftTextToImageNode(IO.ComfyNode):
             category="api node/image/Recraft",
             description="Generates images synchronously based on prompt and resolution.",
             inputs=[
-                IO.String.Input(
-                    "prompt",
-                    multiline=True,
-                    default="",
-                    min_length=1,
-                    max_length=1000,
-                    tooltip="Prompt for the image generation.",
-                ),
+                IO.String.Input("prompt", multiline=True, default="", tooltip="Prompt for the image generation."),
                 IO.Combo.Input(
                     "size",
                     options=[res.value for res in RecraftImageSize],
@@ -472,6 +466,7 @@ class RecraftTextToImageNode(IO.ComfyNode):
         negative_prompt: str = None,
         recraft_controls: RecraftControls = None,
     ) -> IO.NodeOutput:
+        validate_string(prompt, strip_whitespace=False, min_length=1, max_length=1000)
         default_style = RecraftStyle(RecraftStyleV3.realistic_image)
         if recraft_style is None:
             recraft_style = default_style
@@ -521,9 +516,7 @@ class RecraftImageToImageNode(IO.ComfyNode):
             description="Modify image based on prompt and strength.",
             inputs=[
                 IO.Image.Input("image"),
-                IO.String.Input(
-                    "prompt", multiline=True, default="", max_length=1000, tooltip="Prompt for the image generation."
-                ),
+                IO.String.Input("prompt", multiline=True, default="", tooltip="Prompt for the image generation."),
                 IO.Int.Input(
                     "n",
                     default=1,
@@ -590,6 +583,7 @@ class RecraftImageToImageNode(IO.ComfyNode):
         negative_prompt: str = None,
         recraft_controls: RecraftControls = None,
     ) -> IO.NodeOutput:
+        validate_string(prompt, strip_whitespace=False, max_length=1000)
         default_style = RecraftStyle(RecraftStyleV3.realistic_image)
         if recraft_style is None:
             recraft_style = default_style
@@ -641,9 +635,7 @@ class RecraftImageInpaintingNode(IO.ComfyNode):
             inputs=[
                 IO.Image.Input("image"),
                 IO.Mask.Input("mask"),
-                IO.String.Input(
-                    "prompt", multiline=True, default="", max_length=1000, tooltip="Prompt for the image generation."
-                ),
+                IO.String.Input("prompt", multiline=True, default="", tooltip="Prompt for the image generation."),
                 IO.Int.Input(
                     "n",
                     default=1,
@@ -695,6 +687,7 @@ class RecraftImageInpaintingNode(IO.ComfyNode):
         recraft_style: RecraftStyle = None,
         negative_prompt: str = None,
     ) -> IO.NodeOutput:
+        validate_string(prompt, strip_whitespace=False, max_length=1000)
         default_style = RecraftStyle(RecraftStyleV3.realistic_image)
         if recraft_style is None:
             recraft_style = default_style
@@ -742,9 +735,7 @@ class RecraftTextToVectorNode(IO.ComfyNode):
             category="api node/image/Recraft",
             description="Generates SVG synchronously based on prompt and resolution.",
             inputs=[
-                IO.String.Input(
-                    "prompt", default="", max_length=1000, tooltip="Prompt for the image generation.", multiline=True
-                ),
+                IO.String.Input("prompt", default="", tooltip="Prompt for the image generation.", multiline=True),
                 IO.Combo.Input("substyle", options=get_v3_substyles(RecraftStyleV3.vector_illustration)),
                 IO.Combo.Input(
                     "size",
@@ -801,6 +792,7 @@ class RecraftTextToVectorNode(IO.ComfyNode):
         negative_prompt: str = None,
         recraft_controls: RecraftControls = None,
     ) -> IO.NodeOutput:
+        validate_string(prompt, strip_whitespace=False, max_length=1000)
         # create RecraftStyle so strings will be formatted properly (i.e. "None" will become None)
         recraft_style = RecraftStyle(RecraftStyleV3.vector_illustration, substyle=substyle)
 
@@ -1099,9 +1091,7 @@ class RecraftV4TextToImageNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    min_length=1,
-                    max_length=10000,
-                    tooltip="Prompt for the image generation.",
+                    tooltip="Prompt for the image generation. Maximum 10,000 characters.",
                 ),
                 IO.String.Input(
                     "negative_prompt",
@@ -1188,6 +1178,7 @@ class RecraftV4TextToImageNode(IO.ComfyNode):
         seed: int,
         recraft_controls: RecraftControls | None = None,
     ) -> IO.NodeOutput:
+        validate_string(prompt, strip_whitespace=False, min_length=1, max_length=10000)
         response = await sync_op(
             cls,
             ApiEndpoint(path="/proxy/recraft/image_generation", method="POST"),
@@ -1224,9 +1215,7 @@ class RecraftV4TextToVectorNode(IO.ComfyNode):
                 IO.String.Input(
                     "prompt",
                     multiline=True,
-                    min_length=1,
-                    max_length=10000,
-                    tooltip="Prompt for the image generation.",
+                    tooltip="Prompt for the image generation. Maximum 10,000 characters.",
                 ),
                 IO.String.Input(
                     "negative_prompt",
@@ -1313,6 +1302,7 @@ class RecraftV4TextToVectorNode(IO.ComfyNode):
         seed: int,
         recraft_controls: RecraftControls | None = None,
     ) -> IO.NodeOutput:
+        validate_string(prompt, strip_whitespace=False, min_length=1, max_length=10000)
         response = await sync_op(
             cls,
             ApiEndpoint(path="/proxy/recraft/image_generation", method="POST"),

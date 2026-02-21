@@ -36,7 +36,7 @@ class MeshyTextToModelNode(IO.ComfyNode):
             category="api node/3d/Meshy",
             inputs=[
                 IO.Combo.Input("model", options=["latest"]),
-                IO.String.Input("prompt", multiline=True, default="", min_length=1, max_length=600),
+                IO.String.Input("prompt", multiline=True, default=""),
                 IO.Combo.Input("style", options=["realistic", "sculpture"]),
                 IO.DynamicCombo.Input(
                     "should_remesh",
@@ -105,6 +105,7 @@ class MeshyTextToModelNode(IO.ComfyNode):
         pose_mode: str,
         seed: int,
     ) -> IO.NodeOutput:
+        validate_string(prompt, field_name="prompt", min_length=1, max_length=600)
         response = await sync_op(
             cls,
             ApiEndpoint(path="/proxy/meshy/openapi/v2/text-to-3d", method="POST"),
@@ -161,9 +162,8 @@ class MeshyRefineNode(IO.ComfyNode):
                     "texture_prompt",
                     default="",
                     multiline=True,
-                    max_length=600,
                     tooltip="Provide a text prompt to guide the texturing process. "
-                    "Cannot be used at the same time as 'texture_image'.",
+                    "Maximum 600 characters. Cannot be used at the same time as 'texture_image'.",
                 ),
                 IO.Image.Input(
                     "texture_image",
@@ -201,6 +201,8 @@ class MeshyRefineNode(IO.ComfyNode):
         if texture_prompt and texture_image is not None:
             raise ValueError("texture_prompt and texture_image cannot be used at the same time")
         texture_image_url = None
+        if texture_prompt:
+            validate_string(texture_prompt, field_name="texture_prompt", max_length=600)
         if texture_image is not None:
             texture_image_url = (await upload_images_to_comfyapi(cls, texture_image, wait_label="Uploading texture"))[0]
         response = await sync_op(
@@ -279,9 +281,8 @@ class MeshyImageToModelNode(IO.ComfyNode):
                                     "texture_prompt",
                                     default="",
                                     multiline=True,
-                                    max_length=600,
                                     tooltip="Provide a text prompt to guide the texturing process. "
-                                    "Cannot be used at the same time as 'texture_image'.",
+                                    "Maximum 600 characters. Cannot be used at the same time as 'texture_image'.",
                                 ),
                                 IO.Image.Input(
                                     "texture_image",
@@ -448,9 +449,8 @@ class MeshyMultiImageToModelNode(IO.ComfyNode):
                                     "texture_prompt",
                                     default="",
                                     multiline=True,
-                                    max_length=600,
                                     tooltip="Provide a text prompt to guide the texturing process. "
-                                    "Cannot be used at the same time as 'texture_image'.",
+                                    "Maximum 600 characters. Cannot be used at the same time as 'texture_image'.",
                                 ),
                                 IO.Image.Input(
                                     "texture_image",
@@ -739,9 +739,8 @@ class MeshyTextureNode(IO.ComfyNode):
                     "text_style_prompt",
                     default="",
                     multiline=True,
-                    max_length=600,
-                    tooltip="Describe your desired texture style of the object using text. "
-                    "Cannot be used at the same time as 'image_style'.",
+                    tooltip="Describe your desired texture style of the object using text. Maximum 600 characters."
+                    "Maximum 600 characters. Cannot be used at the same time as 'image_style'.",
                 ),
                 IO.Image.Input(
                     "image_style",
