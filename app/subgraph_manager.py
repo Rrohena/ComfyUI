@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import TypedDict, NotRequired
 import os
+import json
 import folder_paths
 import glob
 from aiohttp import web
@@ -31,6 +32,7 @@ class SubgraphEntry(TypedDict):
     Additional info about subgraph; in the case of custom_nodes, will contain nodepack name
     """
     data: str
+    essentials_category: NotRequired[str]
 
 class CustomNodeSubgraphEntryInfo(TypedDict):
     node_pack: str
@@ -101,6 +103,16 @@ class SubgraphManager:
             for file in glob.glob(os.path.join(blueprints_dir, "*.json")):
                 file = file.replace('\\', '/')
                 entry_id, entry = self._create_entry(file, Source.templates, "comfyui")
+                try:
+                    with open(file, 'r', encoding='utf-8') as f:
+                        bp_data = json.load(f)
+                    subgraphs = bp_data.get('definitions', {}).get('subgraphs', [])
+                    if subgraphs:
+                        ec = subgraphs[0].get('essentials_category')
+                        if ec:
+                            entry['essentials_category'] = ec
+                except Exception:
+                    pass
                 subgraphs_dict[entry_id] = entry
 
         self.cached_blueprint_subgraphs = subgraphs_dict

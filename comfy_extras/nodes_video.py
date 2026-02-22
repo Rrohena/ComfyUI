@@ -122,6 +122,7 @@ class CreateVideo(io.ComfyNode):
             search_aliases=["images to video"],
             display_name="Create Video",
             category="image/video",
+            essentials_category="Video Tools",
             description="Create a video from images.",
             inputs=[
                 io.Image.Input("images", tooltip="The images to create a video from."),
@@ -218,6 +219,7 @@ class VideoSlice(io.ComfyNode):
                 "start time",
             ],
             category="image/video",
+            essentials_category="Video Tools",
             inputs=[
                 io.Video.Input("video"),
                 io.Float.Input(
