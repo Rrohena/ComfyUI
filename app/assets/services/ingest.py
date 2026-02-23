@@ -13,6 +13,7 @@ from app.assets.database.queries import (
     add_tags_to_reference,
     fetch_reference_and_asset,
     get_asset_by_hash,
+    get_reference_by_file_path,
     get_reference_tags,
     get_or_create_reference,
     remove_missing_tag_for_asset_id,
@@ -83,7 +84,6 @@ def _ingest_file_from_path(
         )
 
         # Get the reference we just created/updated
-        from app.assets.database.queries import get_reference_by_file_path
         ref = get_reference_by_file_path(session, locator)
         if ref:
             reference_id = ref.id

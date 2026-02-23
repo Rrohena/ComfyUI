@@ -247,7 +247,9 @@ class AssetSeeder:
             return True
 
     def resume(self) -> bool:
-        """Resume a paused scan.
+        """Resume a paused scan. 
+        
+        This is a noop if the scan is not in the PAUSED state
 
         Returns:
             True if resumed, False if not paused

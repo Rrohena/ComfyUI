@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import Literal
 
 import folder_paths
-from app.assets.helpers import normalize_tags
+from app.assets.database.queries import list_references_by_asset_id
+from app.assets.helpers import normalize_tags, select_best_live_path
 
 
 def get_comfy_models_folders() -> list[tuple[str, list[str]]]:
@@ -157,9 +158,6 @@ def compute_filename_for_reference(session, ref) -> str | None:
 
 def compute_filename_for_asset(session, asset_id: str) -> str | None:
     """Compute the relative filename for an asset from its best live reference path."""
-    from app.assets.database.queries import list_references_by_asset_id
-    from app.assets.helpers import select_best_live_path
-
     primary_path = select_best_live_path(
         list_references_by_asset_id(session, asset_id=asset_id)
     )

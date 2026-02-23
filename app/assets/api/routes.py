@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import urllib.parse
@@ -80,8 +81,6 @@ def _build_error_response(
 
 
 def _build_validation_error_response(code: str, ve: ValidationError) -> web.Response:
-    import json
-
     errors = json.loads(ve.json())
     return _build_error_response(400, code, "Validation failed.", {"errors": errors})
 
@@ -489,8 +488,6 @@ async def get_tags(request: web.Request) -> web.Response:
     try:
         query = schemas_in.TagsListQuery.model_validate(query_map)
     except ValidationError as e:
-        import json
-
         return _build_error_response(
             400,
             "INVALID_QUERY",
@@ -631,12 +628,22 @@ async def seed_assets(request: web.Request) -> web.Response:
     wait_param = request.query.get("wait", "").lower()
     should_wait = wait_param in ("true", "1", "yes")
 
+    # Temporarily enable seeder for explicit API calls (--disable-assets-autoscan
+    # only prevents the automatic startup scan, not manual triggers)
+    was_disabled = asset_seeder.is_disabled()
+    if was_disabled:
+        asset_seeder.enable()
+
     started = asset_seeder.start(roots=valid_roots)
     if not started:
+        if was_disabled:
+            asset_seeder.disable()
         return web.json_response({"status": "already_running"}, status=409)
 
     if should_wait:
         asset_seeder.wait()
+        if was_disabled:
+            asset_seeder.disable()
         status = asset_seeder.get_status()
         return web.json_response(
             {

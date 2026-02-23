@@ -32,11 +32,6 @@ from app.assets.database.queries.common import (
 from app.assets.helpers import escape_sql_like_string, get_utc_now, normalize_tags
 
 
-# =============================================================================
-# Metadata conversion helpers (from former asset_info.py)
-# =============================================================================
-
-
 def _check_is_scalar(v):
     if v is None:
         return True
@@ -82,11 +77,6 @@ def convert_metadata_to_rows(key: str, value) -> list[dict]:
         return [{"key": key, "ordinal": i, "val_json": x} for i, x in enumerate(value)]
 
     return [{"key": key, "ordinal": 0, "val_json": value}]
-
-
-# =============================================================================
-# Filter helpers
-# =============================================================================
 
 
 def _apply_tag_filters(
@@ -166,11 +156,6 @@ def _apply_metadata_filter(
         else:
             stmt = stmt.where(_exists_clause_for_value(k, v))
     return stmt
-
-
-# =============================================================================
-# Basic CRUD operations
-# =============================================================================
 
 
 def get_reference_by_id(
@@ -300,11 +285,6 @@ def update_reference_timestamps(
     if preview_id and reference.preview_id != preview_id:
         reference.preview_id = preview_id
     reference.updated_at = now
-
-
-# =============================================================================
-# Listing and pagination
-# =============================================================================
 
 
 def list_references_page(
@@ -440,11 +420,6 @@ def fetch_reference_and_asset(
     return pair[0], pair[1]
 
 
-# =============================================================================
-# Timestamp updates
-# =============================================================================
-
-
 def update_reference_access_time(
     session: Session,
     reference_id: str,
@@ -491,11 +466,6 @@ def update_reference_updated_at(
     )
 
 
-# =============================================================================
-# Metadata operations
-# =============================================================================
-
-
 def set_reference_metadata(
     session: Session,
     reference_id: str,
@@ -538,11 +508,6 @@ def set_reference_metadata(
         session.flush()
 
 
-# =============================================================================
-# Delete operations
-# =============================================================================
-
-
 def delete_reference_by_id(
     session: Session,
     reference_id: str,
@@ -574,11 +539,6 @@ def set_reference_preview(
 
     ref.updated_at = get_utc_now()
     session.flush()
-
-
-# =============================================================================
-# Cache state operations (from former cache_state.py)
-# =============================================================================
 
 
 class CacheStateRow(NamedTuple):
@@ -867,11 +827,6 @@ def delete_orphaned_seed_asset(session: Session, asset_id: str) -> bool:
     return False
 
 
-# =============================================================================
-# Enrichment operations
-# =============================================================================
-
-
 class UnenrichedReferenceRow(NamedTuple):
     """Row for references needing enrichment."""
 
@@ -966,11 +921,6 @@ def bulk_update_enrichment_level(
         .values(enrichment_level=level)
     )
     return result.rowcount
-
-
-# =============================================================================
-# Bulk operations
-# =============================================================================
 
 
 def bulk_insert_references_ignore_conflicts(

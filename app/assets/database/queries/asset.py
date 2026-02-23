@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
-from app.assets.database.models import Asset
+from app.assets.database.models import Asset, AssetReference
 from app.assets.database.queries.common import calculate_rows_per_statement, iter_chunks
 
 
@@ -130,8 +130,6 @@ def reassign_asset_references(
 
     Used when merging a stub asset into an existing asset with the same hash.
     """
-    from app.assets.database.models import AssetReference
-
     ref = session.get(AssetReference, reference_id)
     if ref:
         ref.asset_id = to_asset_id
