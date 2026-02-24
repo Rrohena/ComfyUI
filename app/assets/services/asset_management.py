@@ -287,15 +287,19 @@ def resolve_asset_for_download(
                     f"(asset id={asset.id}, name={ref.name})"
                 )
 
+        # Capture ORM attributes before commit (commit expires loaded objects)
+        ref_name = ref.name
+        asset_mime = asset.mime_type
+
         update_reference_access_time(session, reference_id=reference_id)
         session.commit()
 
         ctype = (
-            asset.mime_type
-            or mimetypes.guess_type(ref.name or abs_path)[0]
+            asset_mime
+            or mimetypes.guess_type(ref_name or abs_path)[0]
             or "application/octet-stream"
         )
-        download_name = ref.name or os.path.basename(abs_path)
+        download_name = ref_name or os.path.basename(abs_path)
         return DownloadResolutionResult(
             abs_path=abs_path,
             content_type=ctype,

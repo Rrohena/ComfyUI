@@ -50,5 +50,4 @@ def _hash_file_obj(file_obj: IO, chunk_size: int = DEFAULT_CHUNK) -> str:
             h.update(chunk)
         return h.hexdigest()
     finally:
-        if orig_pos != 0:
-            file_obj.seek(orig_pos)
+        file_obj.seek(orig_pos)

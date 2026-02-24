@@ -325,8 +325,6 @@ def extract_file_metadata(
     _register_custom_mime_types()
     mime_type, _ = mimetypes.guess_type(abs_path)
     meta.content_type = mime_type
-    if mime_type is None:
-        pass
 
     # Size from stat
     if stat_result is None:

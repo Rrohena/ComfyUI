@@ -315,11 +315,13 @@ def list_tags_with_usage(
         escaped, esc = escape_sql_like_string(prefix.strip().lower())
         total_q = total_q.where(Tag.name.like(escaped + "%", escape=esc))
     if not include_zero:
-        total_q = total_q.where(
-            Tag.name.in_(
-                select(AssetReferenceTag.tag_name).group_by(AssetReferenceTag.tag_name)
-            )
+        visible_tags_sq = (
+            select(AssetReferenceTag.tag_name)
+            .join(AssetReference, AssetReference.id == AssetReferenceTag.asset_reference_id)
+            .where(build_visible_owner_clause(owner_id))
+            .group_by(AssetReferenceTag.tag_name)
         )
+        total_q = total_q.where(Tag.name.in_(visible_tags_sq))
 
     rows = (session.execute(q.limit(limit).offset(offset))).all()
     total = (session.execute(total_q)).scalar_one()

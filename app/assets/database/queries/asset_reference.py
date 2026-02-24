@@ -141,7 +141,7 @@ def _apply_metadata_filter(
 
         if isinstance(value, bool):
             return _exists_for_pred(key, AssetReferenceMeta.val_bool == bool(value))
-        if isinstance(value, (int, float)):
+        if isinstance(value, (int, float, Decimal)):
             num = value if isinstance(value, Decimal) else Decimal(str(value))
             return _exists_for_pred(key, AssetReferenceMeta.val_num == num)
         if isinstance(value, str):
@@ -307,6 +307,7 @@ def list_references_page(
         select(AssetReference)
         .join(Asset, Asset.id == AssetReference.asset_id)
         .where(build_visible_owner_clause(owner_id))
+        .where(AssetReference.is_missing == False)  # noqa: E712
         .options(noload(AssetReference.tags))
     )
 
@@ -336,6 +337,7 @@ def list_references_page(
         .select_from(AssetReference)
         .join(Asset, Asset.id == AssetReference.asset_id)
         .where(build_visible_owner_clause(owner_id))
+        .where(AssetReference.is_missing == False)  # noqa: E712
     )
     if name_contains:
         escaped, esc = escape_sql_like_string(name_contains)

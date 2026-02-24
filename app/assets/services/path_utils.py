@@ -54,10 +54,11 @@ def validate_path_within_base(candidate: str, base: str) -> None:
     cand_abs = os.path.abspath(candidate)
     base_abs = os.path.abspath(base)
     try:
-        if os.path.commonpath([cand_abs, base_abs]) != base_abs:
-            raise ValueError("destination escapes base directory")
+        common = os.path.commonpath([cand_abs, base_abs])
     except Exception:
         raise ValueError("invalid destination path")
+    if common != base_abs:
+        raise ValueError("destination escapes base directory")
 
 
 def compute_relative_filename(file_path: str) -> str | None:

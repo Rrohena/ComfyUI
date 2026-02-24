@@ -259,9 +259,9 @@ def prompt_worker(q, server_instance):
                 extra_data[k] = sensitive[k]
 
             asset_seeder.pause()
-            
+
             e.execute(item[2], prompt_id, extra_data, item[4])
-            
+
             asset_seeder.resume()
             need_gc = True
 

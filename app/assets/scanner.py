@@ -329,8 +329,6 @@ def build_asset_specs(
                 logging.warning("Failed to hash %s: %s", abs_p, e)
 
         mime_type = metadata.content_type if metadata else None
-        if mime_type is None:
-            pass
         specs.append(
             {
                 "abs_path": abs_p,

@@ -433,7 +433,11 @@ async def update_asset_route(request: web.Request) -> web.Response:
             user_metadata=result.ref.user_metadata or {},
             updated_at=result.ref.updated_at,
         )
-    except (ValueError, PermissionError) as ve:
+    except PermissionError as pe:
+        return _build_error_response(
+            403, "FORBIDDEN", str(pe), {"id": reference_id}
+        )
+    except ValueError as ve:
         return _build_error_response(
             404, "ASSET_NOT_FOUND", str(ve), {"id": reference_id}
         )
@@ -544,7 +548,11 @@ async def add_asset_tags(request: web.Request) -> web.Response:
             already_present=result.already_present,
             total_tags=result.total_tags,
         )
-    except (ValueError, PermissionError) as ve:
+    except PermissionError as pe:
+        return _build_error_response(
+            403, "FORBIDDEN", str(pe), {"id": reference_id}
+        )
+    except ValueError as ve:
         return _build_error_response(
             404, "ASSET_NOT_FOUND", str(ve), {"id": reference_id}
         )
@@ -658,6 +666,11 @@ async def seed_assets(request: web.Request) -> web.Response:
             },
             status=200,
         )
+
+    # Re-disable after starting: the running thread doesn't check _disabled,
+    # so this only prevents new scans from auto-starting while this one runs.
+    if was_disabled:
+        asset_seeder.disable()
 
     return web.json_response({"status": "started"}, status=202)
 

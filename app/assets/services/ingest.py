@@ -283,6 +283,8 @@ def upload_from_temp_path(
             created_new=False,
         )
 
+    if not tags:
+        raise ValueError("tags are required for new asset uploads")
     base_dir, subdirs = resolve_destination_from_tags(tags)
     dest_dir = os.path.join(base_dir, *subdirs) if subdirs else base_dir
     os.makedirs(dest_dir, exist_ok=True)

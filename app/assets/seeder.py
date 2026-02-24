@@ -247,8 +247,8 @@ class AssetSeeder:
             return True
 
     def resume(self) -> bool:
-        """Resume a paused scan. 
-        
+        """Resume a paused scan.
+
         This is a noop if the scan is not in the PAUSED state
 
         Returns:
@@ -260,8 +260,8 @@ class AssetSeeder:
             logging.info("Asset seeder resuming")
             self._state = State.RUNNING
             self._pause_event.set()
-            self._emit_event("assets.seed.resumed", {})
-            return True
+        self._emit_event("assets.seed.resumed", {})
+        return True
 
     def restart(
         self,
