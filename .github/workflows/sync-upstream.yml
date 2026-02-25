@@ -1,0 +1,22 @@
+name: Sync with upstream
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # daily at 06:00 UTC
+  workflow_dispatch:        # allow manual trigger from the Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync fork with comfyanonymous/ComfyUI
+        run: |
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/repos/Rrohena/ComfyUI/merge-upstream \
+            -d '{"branch": "master"}' | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          print(r.get('message', r))
+          "
